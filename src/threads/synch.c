@@ -113,9 +113,25 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters)){
+     thread_unblock (list_entry (list_pop_front (&sema->waiters),
+                              struct thread, elem));
+     
+     /*Michalis CHOOSES THE THREAD WITH HIGHEST PRIORITY TO WAKE UP
+    struct thread* chosen_to_unblock = list_begin(&sema->waiters);
+    for (e = list_begin (&sema->waiters); e != list_end (&sema->waiters);
+       e = list_next (e))
+    {
+      struct thread* t = list_entry (e,struct thread,elem);
+      if(t->priority>chosen->priority){
+	chosen = t;
+      }
+    }
+    thread_unblock(chosen_to_unblock);
+     */
+  }
+  
+   
   sema->value++;
   intr_set_level (old_level);
 }
@@ -196,6 +212,12 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  /*MICHALIS-DONATION OF PRIORTY
+  if(&lock->semaphore.value==0){
+    if(&lock->holder->priority<thread_current()->priorty){
+      &lock->holder->priorty = thread_current()->priority
+  }
+  */
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 }
