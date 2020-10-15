@@ -146,18 +146,18 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-  /*MICHALIS
+  //MICHALIS
   struct list_elem* e;
   for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
       struct thread* t = list_entry (e,struct thread,elem);
       if(t->priority>thread_get_priority()){
-	thread_yield();
+        intr_yield_on_return();
 	break;
       }
     }
-  */
+  //
       
 }
 
@@ -275,17 +275,22 @@ thread_unblock (struct thread *t)
 
   ASSERT (is_thread (t));
 
+  
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+  // thread_yield();
   intr_set_level (old_level);
 
+ 
+ 
   //Michalis checks if the priority of the thread created is highest than the currents
   //If thats the case calls schedule()
-  //if(t->priority>thread_current()->priority){
-    //  thread_yield();
-  // }
+ // if(t->priority>thread_current()->priority){
+    //intr_yield_on_return();
+  //thread_yield();
+    //}
   //
 }
 
