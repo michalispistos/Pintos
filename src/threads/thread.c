@@ -146,16 +146,17 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-  /*MICHALIS
+  //MICHALIS
+  struct list_elem* e;
   for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
       struct thread* t = list_entry (e,struct thread,elem);
-      if(t->priority>thread_current()->prioorty){
-	schedule();
+      if(t->priority>thread_current()->priority){
+	thread_yield();
       }
     }
-  */
+  //
       
 }
 
@@ -226,18 +227,16 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
-  /*Michalis Adds priority of a thread
-  t->priority = priority;
-  */
+
   /* Add to run queue. */
   thread_unblock (t);
  
-  /*MICHALIS checks if the priority of the thread created is highest than the currents
+  //MICHALIS checks if the priority of the thread created is highest than the currents
   //If thats the case calls schedule()
   if(t->priority>thread_current()->priority){
-    schedule();
+    thread_yield();
   }
-  */
+  //
 
   return tid;
 }
@@ -279,12 +278,12 @@ thread_unblock (struct thread *t)
   t->status = THREAD_READY;
   intr_set_level (old_level);
 
-  /*Michalis checks if the priority of the thread created is highest than the currents
+  //Michalis checks if the priority of the thread created is highest than the currents
   //If thats the case calls schedule()
-  if(t->priority>thread_current()->priorty){
-    schedule();
-  }
-  */
+  // if(t->priority>thread_current()->priority){
+    // thread_yield();
+  //}
+  //
 }
 
 /* Returns the name of the running thread. */
@@ -537,21 +536,24 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else{
+    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
 
-  /*Michalis  chooses the thread with the highest priority
-  struct thread* t chosen;
-  for (e = list_begin (&ready_list); e != list_end (&ready_list);
-       e = list_next (e))
-    {
-      struct thread* t = list_entry (e,struct thread,sleep_elem);
-      if(t->priority>chosen>prioirty){
-	chosen = t;
+    //Michalis  chooses the thread with the highest priority
+    struct thread* chosen = list_entry(list_begin(&ready_list),struct thread,elem);
+    struct list_elem* e;
+    for (e = list_begin (&ready_list); e != list_end (&ready_list);
+	 e = list_next (e))
+      {
+	struct thread* t = list_entry (e,struct thread,elem);
+	if(t->priority>chosen->priority){
+	  chosen = t;
+	}
       }
-    }
-  return chosen;
-  */
+    list_remove(&chosen->elem);
+    return chosen;
+  }
+  //
 }
 
 /* Completes a thread switch by activating the new thread's page
