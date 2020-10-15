@@ -146,17 +146,18 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-  //MICHALIS
+  /*MICHALIS
   struct list_elem* e;
   for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
       struct thread* t = list_entry (e,struct thread,elem);
-      if(t->priority>thread_current()->priority){
+      if(t->priority>thread_get_priority()){
 	thread_yield();
+	break;
       }
     }
-  //
+  */
       
 }
 
@@ -233,9 +234,11 @@ thread_create (const char *name, int priority,
  
   //MICHALIS checks if the priority of the thread created is highest than the currents
   //If thats the case calls schedule()
-  if(t->priority>thread_current()->priority){
+  //
+  if(t -> priority > thread_get_priority()) {
     thread_yield();
   }
+  //
   //
 
   return tid;
@@ -280,9 +283,9 @@ thread_unblock (struct thread *t)
 
   //Michalis checks if the priority of the thread created is highest than the currents
   //If thats the case calls schedule()
-  // if(t->priority>thread_current()->priority){
-    // thread_yield();
-  //}
+  //if(t->priority>thread_current()->priority){
+    //  thread_yield();
+  // }
   //
 }
 
@@ -380,6 +383,16 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  struct list_elem* e;
+  for (e = list_begin (&ready_list); e != list_end (&ready_list);
+       e = list_next (e))
+    {
+      struct thread* t = list_entry (e,struct thread,elem);
+      if(t->priority>thread_get_priority()){
+	thread_yield();
+	break;
+      }
+    }
 }
 
 /* Returns the current thread's priority. */
@@ -538,8 +551,9 @@ next_thread_to_run (void)
     return idle_thread;
   else{
     //return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    //}
 
-    //Michalis  chooses the thread with the highest priority
+  //Michalis  chooses the thread with the highest priority
     struct thread* chosen = list_entry(list_begin(&ready_list),struct thread,elem);
     struct list_elem* e;
     for (e = list_begin (&ready_list); e != list_end (&ready_list);
@@ -553,7 +567,7 @@ next_thread_to_run (void)
     list_remove(&chosen->elem);
     return chosen;
   }
-  //
+    //
 }
 
 /* Completes a thread switch by activating the new thread's page

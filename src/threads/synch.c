@@ -115,7 +115,7 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)){
     // thread_unblock (list_entry (list_pop_front (&sema->waiters),
-    //                        struct thread, elem));
+         //                   struct thread, elem));
      
     //Michalis CHOOSES THE THREAD WITH HIGHEST PRIORITY TO WAKE UP
     struct thread* chosen = list_entry(list_begin(&sema->waiters),struct thread,elem);
@@ -130,7 +130,7 @@ sema_up (struct semaphore *sema)
     }
     list_remove(&chosen->elem);
     thread_unblock(chosen);
-     
+    //
   }
   
    
