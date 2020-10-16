@@ -16,6 +16,7 @@
 #include "userprog/process.h"
 #endif
 
+static struct semaphore sema;
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -90,6 +91,7 @@ thread_init (void)
 {
   ASSERT (intr_get_level () == INTR_OFF);
 
+  sema_init(&sema,1);
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
@@ -146,7 +148,7 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-  //MICHALIS
+  /*MICHALIS
   struct list_elem* e;
   for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
@@ -157,7 +159,7 @@ thread_tick (void)
 	break;
       }
     }
-  //
+  */
       
 }
 
@@ -268,6 +270,8 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
+
+
 void
 thread_unblock (struct thread *t) 
 {
@@ -280,17 +284,15 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
-  // thread_yield();
   intr_set_level (old_level);
-
  
  
   //Michalis checks if the priority of the thread created is highest than the currents
   //If thats the case calls schedule()
- // if(t->priority>thread_current()->priority){
+// if(t->priority>thread_current()->priority){
     //intr_yield_on_return();
-  //thread_yield();
-    //}
+   // thread_yield();
+   // }
   //
 }
 
@@ -387,6 +389,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  
   thread_current ()->priority = new_priority;
   struct list_elem* e;
   for (e = list_begin (&ready_list); e != list_end (&ready_list);
@@ -398,6 +401,7 @@ thread_set_priority (int new_priority)
 	break;
       }
     }
+  
 }
 
 /* Returns the current thread's priority. */
@@ -555,8 +559,8 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else{
-    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
-    //}
+    //  return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    // }
 
   //Michalis  chooses the thread with the highest priority
     struct thread* chosen = list_entry(list_begin(&ready_list),struct thread,elem);
@@ -572,6 +576,7 @@ next_thread_to_run (void)
     list_remove(&chosen->elem);
     return chosen;
   }
+    
     //
 }
 
