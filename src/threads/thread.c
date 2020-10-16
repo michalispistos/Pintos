@@ -210,14 +210,11 @@ tid_t thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
-
   /* Add to run queue. */
   thread_unblock (t);
- 
-  if(t -> priority > thread_get_priority()) {
+  if (t->priority > thread_get_priority()) {
     thread_yield();
   }
-
   return tid;
 }
 
@@ -245,14 +242,12 @@ void thread_block (void)
    it may expect that it can atomically unblock a thread and
    update other data. */
 
-
-void thread_unblock (struct thread *t) 
+void thread_unblock (struct thread *t)
 {
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
 
-  
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
@@ -348,15 +343,13 @@ void thread_set_priority (int new_priority)
 { 
   thread_current ()->priority = new_priority;
   struct list_elem* e;
-  for (e = list_begin (&ready_list); e != list_end (&ready_list);
-       e = list_next (e))
-    {
-      struct thread* t = list_entry (e,struct thread,elem);
-      if(t->priority>thread_get_priority()){
-	thread_yield();
-	break;
-      }
+  for (e = list_begin (&ready_list); e != list_end (&ready_list); e = list_next (e)) {
+    struct thread *t = list_entry(e, struct thread, elem);
+    if (t->priority > thread_get_priority()) {
+      thread_yield();
+      break;
     }
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -502,18 +495,17 @@ static struct thread *next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else{
-    struct thread* chosen = list_entry(list_begin(&ready_list),struct thread,elem);
+  else {
+    struct thread* chosen = list_entry (list_begin (&ready_list), struct thread, elem);
     struct list_elem* e;
     for (e = list_begin (&ready_list); e != list_end (&ready_list);
-	 e = list_next (e))
-      {
-	struct thread* t = list_entry (e,struct thread,elem);
-	if(t->priority>chosen->priority){
-	  chosen = t;
-	}
+	 e = list_next (e)) {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (t->priority > chosen->priority) {
+        chosen = t;
       }
-    list_remove(&chosen->elem);
+    }
+    list_remove (&chosen->elem);
     return chosen;
   }
 }

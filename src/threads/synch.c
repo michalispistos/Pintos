@@ -112,31 +112,28 @@ void sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
   old_level = intr_disable ();
   
-  struct thread* chosen_thread=NULL;
-  if (!list_empty(&sema->waiters)){
-    chosen_thread = list_entry(list_begin(&sema->waiters),struct thread,elem);
+  struct thread* chosen_thread = NULL;
+  if (!list_empty (&sema->waiters)) {
+    chosen_thread = list_entry (list_begin (&sema->waiters), struct thread, elem);
     struct list_elem* e;
     for (e = list_begin (&sema->waiters)->next; e != list_end (&sema->waiters);
-	 e = list_next (e))
-      {
-	struct thread* t = list_entry (e,struct thread,elem);
-	if(t->priority>chosen_thread->priority){
-	  chosen_thread = t;
-	}
+	 e = list_next (e)) {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (t->priority > chosen_thread->priority) {
+        chosen_thread = t;
       }
-   
-    list_remove(&chosen_thread->elem);
-    thread_unblock(chosen_thread);
+    }
+    list_remove (&chosen_thread->elem);
+    thread_unblock (chosen_thread);
   }
   sema->value++;
-  if(chosen_thread && chosen_thread->priority>thread_get_priority()){
-    if(! intr_context()){
+  if (chosen_thread && chosen_thread->priority > thread_get_priority()) {
+    if (!intr_context()) {
       thread_yield();
-    }else{
+    } else {
       intr_yield_on_return();
     }
   }
-  
   intr_set_level (old_level);
 }
 
@@ -269,11 +266,11 @@ bool lock_held_by_current_thread (const struct lock *lock)
 }
 
 /* One semaphore in a list. */
-struct semaphore_elem 
+struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
-  };
+  }
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -336,20 +333,22 @@ void cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)){
-    struct semaphore_elem* chosen_sem_elem = list_entry(list_begin(&cond->waiters),struct semaphore_elem,elem);
+  if (!list_empty (&cond->waiters)) {
+    struct semaphore_elem* chosen_sem_elem = list_entry (list_begin (&cond->waiters), struct semaphore_elem, elem);
     struct list_elem* e;
     for (e = list_begin (&cond->waiters)->next; e != list_end (&cond->waiters);
-	 e = list_next (e))
-      {
-	struct semaphore_elem* sem_elem = list_entry (e,struct semaphore_elem,elem);
-	struct thread* sem_elem_thread = list_entry(list_begin(&sem_elem->semaphore.waiters),struct thread,elem);
-	struct thread* chosen_sem_elem_thread = list_entry(list_begin(&chosen_sem_elem->semaphore.waiters),struct thread,elem);
-	if(sem_elem_thread->priority>chosen_sem_elem_thread->priority){
-	  chosen_sem_elem = sem_elem;
-	}
+	 e = list_next (e)) {
+      struct semaphore_elem *sem_elem = list_entry (e,
+      struct semaphore_elem, elem);
+      struct thread *sem_elem_thread = list_entry (list_begin (&sem_elem->semaphore.waiters),
+      struct thread, elem);
+      struct thread *chosen_sem_elem_thread = list_entry (list_begin (&chosen_sem_elem->semaphore.waiters),
+      struct thread, elem);
+      if (sem_elem_thread->priority > chosen_sem_elem_thread->priority) {
+        chosen_sem_elem = sem_elem;
       }
-    list_remove(&chosen_sem_elem->elem);
+    }
+    list_remove (&chosen_sem_elem->elem);
     sema_up (&chosen_sem_elem->semaphore); 
   }
 }
