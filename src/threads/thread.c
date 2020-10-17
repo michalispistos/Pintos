@@ -496,17 +496,17 @@ static struct thread *next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else {
-    struct thread* chosen = list_entry (list_begin (&ready_list), struct thread, elem);
+    struct thread* chosen_thread = list_entry (list_begin (&ready_list), struct thread, elem);
     struct list_elem* e;
     for (e = list_begin (&ready_list); e != list_end (&ready_list);
 	 e = list_next (e)) {
       struct thread *t = list_entry (e, struct thread, elem);
-      if (t->priority > chosen->priority) {
-        chosen = t;
+      if (t->priority > chosen_thread->priority) {
+        chosen_thread = t;
       }
     }
-    list_remove (&chosen->elem);
-    return chosen;
+    list_remove (&chosen_thread->elem);
+    return chosen_thread;
   }
 }
 

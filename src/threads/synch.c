@@ -65,7 +65,6 @@ void sema_down (struct semaphore *sema)
   ASSERT (sema != NULL);
   ASSERT (!intr_context ());
   
-  //thread_yield();
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
@@ -270,7 +269,7 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
-  }
+};
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
