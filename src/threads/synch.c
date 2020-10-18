@@ -58,6 +58,8 @@ void sema_init (struct semaphore *sema, unsigned value)
    interrupt handler.  This function may be called with
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. */
+
+
 void sema_down (struct semaphore *sema) 
 {
   enum intr_level old_level;
@@ -68,7 +70,7 @@ void sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);      
+      list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
   sema->value--;
@@ -105,6 +107,32 @@ bool sema_try_down (struct semaphore *sema)
 
    This function may be called from an interrupt handler. */
 
+static void reduce_priority(struct thread* t){
+
+  int highest_priority=0;
+  if(!list_empty(&t->blocked_threads)){
+    highest_priority = list_entry(list_begin(&t->blocked_threads),struct thread,blocked_elem)->effective_priority;
+    struct list_elem* e;
+    for (e = list_begin (&t->blocked_threads)->next; e != list_end (&t->blocked_threads);
+	 e = list_next (e)) {
+      struct thread *t1 = list_entry (e, struct thread, blocked_elem);
+      if (t1->effective_priority > highest_priority) {
+        highest_priority = t1->effective_priority;
+      }
+    }
+  }
+  if(highest_priority>t->base_priority){
+    t->effective_priority=highest_priority;
+  }else{
+    t->effective_priority = t->base_priority;
+  }
+
+  if(t->priority_receiver){
+    reduce_priority(t->priority_receiver);
+  }
+  
+}
+
 void sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
@@ -112,21 +140,52 @@ void sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   
   struct thread* chosen_thread = NULL;
+ 
   if (!list_empty (&sema->waiters)) {
+    
     chosen_thread = list_entry (list_begin (&sema->waiters), struct thread, elem);
     struct list_elem* e;
     for (e = list_begin (&sema->waiters)->next; e != list_end (&sema->waiters);
 	 e = list_next (e)) {
       struct thread *t = list_entry (e, struct thread, elem);
-      if (t->priority > chosen_thread->priority) {
+      if (t->effective_priority > chosen_thread->effective_priority) {
         chosen_thread = t;
       }
     }
     list_remove (&chosen_thread->elem);
-    thread_unblock (chosen_thread);
-  }
-  sema->value++;
-  if (chosen_thread && chosen_thread->priority > thread_get_priority()) {
+    
+    if(chosen_thread->priority_receiver){
+      struct thread* previous_receiver = chosen_thread->priority_receiver;
+      chosen_thread->priority_receiver = NULL;
+      list_remove(&chosen_thread->blocked_elem);
+    
+      
+    for (e = list_begin (&sema->waiters); e != list_end (&sema->waiters);
+	 e = list_next (e)) {
+      
+      struct list_elem* e1 =list_begin (&previous_receiver->blocked_threads);
+      while(e1 != list_end (&previous_receiver->blocked_threads)){
+	struct list_elem* temp = list_next (e1);
+	if(list_entry(e,struct thread,elem)==list_entry(e1,struct thread,blocked_elem)){
+	list_remove(e1);
+	list_entry(e1,struct thread,blocked_elem)->priority_receiver = chosen_thread;
+	list_push_back(&chosen_thread->blocked_threads,e1);
+	}
+	e1= temp;
+      }
+    }
+
+    if(chosen_thread->effective_priority==previous_receiver->effective_priority){
+      reduce_priority(previous_receiver);
+    }
+    }
+    thread_unblock(chosen_thread);
+    }
+    
+    sema->value++;
+    
+    
+  if (chosen_thread && chosen_thread->effective_priority >= thread_get_priority()) {
     if (!intr_context()) {
       thread_yield();
     } else {
@@ -134,8 +193,8 @@ void sema_up (struct semaphore *sema)
     }
   }
   intr_set_level (old_level);
-}
-
+  }
+  
 static void sema_test_helper (void *sema_);
 
 /* Self-test for semaphores that makes control "ping-pong"
@@ -204,21 +263,40 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+
+
+
+static void change_priority(struct thread* t,int priority){
+  t->effective_priority = priority;
+  if(t->priority_receiver){
+    if(t->priority_receiver->effective_priority<priority){
+      change_priority(t->priority_receiver,priority);
+    }
+  }
+}
+
+
 void lock_acquire (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  /*MICHALIS-DONATION OF PRIORTY
-  if(&lock->semaphore.value==0){
-    if(&lock->holder->priority<thread_current()->priorty){
-      &lock->holder->priorty = thread_current()->priority
-  }
-  */
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+    
+  if(lock->semaphore.value==0){      
+      thread_current()->priority_receiver = lock->holder;
+      list_push_back(&lock->holder->blocked_threads,&thread_current()->blocked_elem);
+      if(lock->holder->effective_priority<thread_current()->effective_priority){
+	change_priority(lock->holder,thread_current()->effective_priority);
+      }
+    }
+  
+ 
+  sema_down (&lock->semaphore);   
+  lock->holder = thread_current ();   
+ 
 }
+
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -244,6 +322,11 @@ bool lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+
+
+  
+
+
 void
 lock_release (struct lock *lock) 
 {
@@ -252,6 +335,7 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -343,7 +427,7 @@ void cond_signal (struct condition *cond, struct lock *lock UNUSED)
       struct thread, elem);
       struct thread *chosen_sem_elem_thread = list_entry (list_begin (&chosen_sem_elem->semaphore.waiters),
       struct thread, elem);
-      if (sem_elem_thread->priority > chosen_sem_elem_thread->priority) {
+      if (sem_elem_thread->effective_priority > chosen_sem_elem_thread->effective_priority) {
         chosen_sem_elem = sem_elem;
       }
     }
@@ -365,4 +449,5 @@ void cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+  
 }
