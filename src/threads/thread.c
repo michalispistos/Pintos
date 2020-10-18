@@ -212,7 +212,7 @@ tid_t thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-  if (t->priority > thread_get_priority()) {
+  if (t->effective_priority >= thread_get_priority()) {
     thread_yield();
   }
   return tid;
@@ -241,6 +241,8 @@ void thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
+
+
 
 void thread_unblock (struct thread *t)
 {
@@ -338,24 +340,52 @@ void thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
+static void thread_set_effective_priority(int new_priority){
+  
+  if(thread_current()->effective_priority<new_priority || list_empty(&thread_current()->blocked_threads)){
+    thread_current()->effective_priority = new_priority;
+  }
+  else if(thread_current()->effective_priority > new_priority){
+    int highest_blocked_threads_priority = list_entry(list_begin(&thread_current()->blocked_threads),struct thread,blocked_elem)->effective_priority;
+    struct list_elem* e;
+    for(e = list_begin(&thread_current()->blocked_threads)->next;e!=list_end(&thread_current()->blocked_threads);e=list_next(e)){
+      struct thread* t = list_entry(e,struct thread,blocked_elem);
+      if(t->effective_priority>highest_blocked_threads_priority){
+	highest_blocked_threads_priority = t->effective_priority;
+      }
+    }
+    if(highest_blocked_threads_priority>new_priority){
+      thread_current()->effective_priority = highest_blocked_threads_priority;
+    }else{
+      thread_current()->effective_priority = new_priority;
+    }
+  }
+
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority (int new_priority) 
-{ 
-  thread_current ()->priority = new_priority;
+{
+
+  thread_current()->base_priority = new_priority;
+ 
+  thread_set_effective_priority(new_priority);
+ 
   struct list_elem* e;
   for (e = list_begin (&ready_list); e != list_end (&ready_list); e = list_next (e)) {
     struct thread *t = list_entry(e, struct thread, elem);
-    if (t->priority > thread_get_priority()) {
-      thread_yield();
+    if (t->effective_priority >= thread_get_priority()) {
+       thread_yield();
       break;
     }
   }
+
 }
 
 /* Returns the current thread's priority. */
 int thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current ()->effective_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -454,6 +484,7 @@ static bool is_thread (struct thread *t)
 
 /* Does basic initialization of T as a blocked thread named
    NAME. */
+
 static void init_thread (struct thread *t, const char *name, int priority)
 {
   enum intr_level old_level;
@@ -462,15 +493,20 @@ static void init_thread (struct thread *t, const char *name, int priority)
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
 
+ 
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
+  t->effective_priority = priority;
+  list_init(&t->blocked_threads); 
+  t->priority_receiver = NULL;
+  t->base_priority = priority;
   t->magic = THREAD_MAGIC;
-
+  
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+
   intr_set_level (old_level);
 }
 
@@ -496,17 +532,20 @@ static struct thread *next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else {
+
     struct thread* chosen_thread = list_entry (list_begin (&ready_list), struct thread, elem);
     struct list_elem* e;
     for (e = list_begin (&ready_list); e != list_end (&ready_list);
 	 e = list_next (e)) {
       struct thread *t = list_entry (e, struct thread, elem);
-      if (t->priority > chosen_thread->priority) {
+      if (t->effective_priority > chosen_thread->effective_priority) {
         chosen_thread = t;
       }
     }
     list_remove (&chosen_thread->elem);
     return chosen_thread;
+    
+
   }
 }
 
