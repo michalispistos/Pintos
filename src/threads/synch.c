@@ -142,16 +142,8 @@ void sema_up (struct semaphore *sema)
   struct thread* chosen_thread = NULL;
  
   if (!list_empty (&sema->waiters)) {
-    
-    chosen_thread = list_entry (list_begin (&sema->waiters), struct thread, elem);
-    struct list_elem* e;
-    for (e = list_begin (&sema->waiters)->next; e != list_end (&sema->waiters);
-	 e = list_next (e)) {
-      struct thread *t = list_entry (e, struct thread, elem);
-      if (t->effective_priority > chosen_thread->effective_priority) {
-        chosen_thread = t;
-      }
-    }
+
+    chosen_thread = highest_priority_thread_elem(&sema->waiters);
     list_remove (&chosen_thread->elem);
     
     if(chosen_thread->priority_receiver){
@@ -159,22 +151,22 @@ void sema_up (struct semaphore *sema)
       chosen_thread->priority_receiver = NULL;
       list_remove(&chosen_thread->blocked_elem);
     
-      
+
+    struct list_elem* e;
     for (e = list_begin (&sema->waiters); e != list_end (&sema->waiters);
 	 e = list_next (e)) {
-      
       struct list_elem* e1 =list_begin (&previous_receiver->blocked_threads);
       while(e1 != list_end (&previous_receiver->blocked_threads)){
 	struct list_elem* temp = list_next (e1);
 	if(list_entry(e,struct thread,elem)==list_entry(e1,struct thread,blocked_elem)){
-	list_remove(e1);
-	list_entry(e1,struct thread,blocked_elem)->priority_receiver = chosen_thread;
-	list_push_back(&chosen_thread->blocked_threads,e1);
+	  list_remove(e1);
+	  list_entry(e1,struct thread,blocked_elem)->priority_receiver = chosen_thread;
+	  list_push_back(&chosen_thread->blocked_threads,e1);
 	}
 	e1= temp;
       }
     }
-
+    
     if(chosen_thread->effective_priority==previous_receiver->effective_priority){
       reduce_priority(previous_receiver);
     }
@@ -334,7 +326,11 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
+
+  
   sema_up (&lock->semaphore);
+
+  
   
 }
 
@@ -421,12 +417,9 @@ void cond_signal (struct condition *cond, struct lock *lock UNUSED)
     struct list_elem* e;
     for (e = list_begin (&cond->waiters)->next; e != list_end (&cond->waiters);
 	 e = list_next (e)) {
-      struct semaphore_elem *sem_elem = list_entry (e,
-      struct semaphore_elem, elem);
-      struct thread *sem_elem_thread = list_entry (list_begin (&sem_elem->semaphore.waiters),
-      struct thread, elem);
-      struct thread *chosen_sem_elem_thread = list_entry (list_begin (&chosen_sem_elem->semaphore.waiters),
-      struct thread, elem);
+      struct semaphore_elem *sem_elem = list_entry (e,struct semaphore_elem, elem);
+      struct thread *sem_elem_thread = list_entry (list_begin (&sem_elem->semaphore.waiters), struct thread, elem);
+      struct thread *chosen_sem_elem_thread = list_entry (list_begin (&chosen_sem_elem->semaphore.waiters),struct thread, elem);
       if (sem_elem_thread->effective_priority > chosen_sem_elem_thread->effective_priority) {
         chosen_sem_elem = sem_elem;
       }

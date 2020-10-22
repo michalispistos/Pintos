@@ -241,9 +241,6 @@ void thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-
-
-
 void thread_unblock (struct thread *t)
 {
   enum intr_level old_level;
@@ -340,6 +337,21 @@ void thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
+
+struct thread* highest_priority_thread_elem(struct list* list){
+
+  struct thread* highest_priority_thread = list_entry(list_begin(list),struct thread,elem);
+  struct list_elem* e;
+  for(e = list_begin(list); e!=list_end(list); e=list_next(e)){
+    struct thread* t = list_entry(e,struct thread,elem);
+    if(t->effective_priority>highest_priority_thread->effective_priority){
+      highest_priority_thread = t;
+    }
+  }
+  return highest_priority_thread;
+}
+
+
 static void thread_set_effective_priority(int new_priority){
   
   if(thread_current()->effective_priority<new_priority || list_empty(&thread_current()->blocked_threads)){
@@ -370,15 +382,10 @@ void thread_set_priority (int new_priority)
   thread_current()->base_priority = new_priority;
  
   thread_set_effective_priority(new_priority);
- 
-  struct list_elem* e;
-  for (e = list_begin (&ready_list); e != list_end (&ready_list); e = list_next (e)) {
-    struct thread *t = list_entry(e, struct thread, elem);
-    if (t->effective_priority >= thread_get_priority()) {
-       thread_yield();
-      break;
+  
+  if(highest_priority_thread_elem(&ready_list)->effective_priority>=thread_get_priority()){
+      thread_yield();
     }
-  }
 
 }
 
@@ -532,20 +539,9 @@ static struct thread *next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else {
-
-    struct thread* chosen_thread = list_entry (list_begin (&ready_list), struct thread, elem);
-    struct list_elem* e;
-    for (e = list_begin (&ready_list); e != list_end (&ready_list);
-	 e = list_next (e)) {
-      struct thread *t = list_entry (e, struct thread, elem);
-      if (t->effective_priority > chosen_thread->effective_priority) {
-        chosen_thread = t;
-      }
-    }
+    struct thread* chosen_thread = highest_priority_thread_elem(&ready_list);
     list_remove (&chosen_thread->elem);
     return chosen_thread;
-    
-
   }
 }
 
