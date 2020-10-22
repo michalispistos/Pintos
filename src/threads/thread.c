@@ -337,7 +337,7 @@ void thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-
+/*Return the highest_priority_thread from a list of elems*/
 struct thread* highest_priority_thread_elem(struct list* list){
 
   struct thread* highest_priority_thread = list_entry(list_begin(list),struct thread,elem);
@@ -351,6 +351,7 @@ struct thread* highest_priority_thread_elem(struct list* list){
   return highest_priority_thread;
 }
 
+/*Return the highest_thread_priority from a list of blocked_elems*/
 int highest_thread_priority_blocked_elem(struct list* list){
 
   int highest_thread_priority = list_entry(list_begin(list),struct thread,blocked_elem)->effective_priority;
@@ -365,7 +366,7 @@ int highest_thread_priority_blocked_elem(struct list* list){
 }
 
 
-
+/*sets the effective_priority when base_priority is modified*/ 
 static void thread_set_effective_priority(int new_priority){
   
   if(thread_current()->effective_priority<new_priority || list_empty(&thread_current()->blocked_threads)){

@@ -42,6 +42,7 @@
 
    - up or "V": increment the value (and wake up one waiting
      thread, if any). */
+
 void sema_init (struct semaphore *sema, unsigned value) 
 {
   ASSERT (sema != NULL);
@@ -102,10 +103,13 @@ bool sema_try_down (struct semaphore *sema)
   return success;
 }
 
-/* Up or "V" operation on a semaphore.  Increments SEMA's value
-   and wakes up one thread of those waiting for SEMA, if any.
-
-   This function may be called from an interrupt handler. */
+/* This function is called when we remove the a thread(A) from 
+the blocked_thread lists of another thread(B),
+if these threads have the same effective_priority. 
+If that is the case then since A is not donating priority to B anymore,
+we set B's effecetive_priority to the highest priority 
+between the blocked_threads and its base_priority.
+ */
 
 static void reduce_priority(struct thread* t){
 
@@ -125,6 +129,10 @@ static void reduce_priority(struct thread* t){
   
 }
 
+/* Up or "V" operation on a semaphore.  Increments SEMA's value
+   and wakes up one thread of those waiting for SEMA, if any.
+
+   This function may be called from an interrupt handler. */
 void sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
@@ -239,17 +247,16 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
-/* Acquires LOCK, sleeping until it becomes available if
-   necessary.  The lock must not already be held by the current
-   thread.
-
-   This function may sleep, so it must not be called within an
-   interrupt handler.  This function may be called with
-   interrupts disabled, but interrupts will be turned back on if
-   we need to sleep. */
 
 
 
+/*This function is called when a new thread(A) is
+ added to the blocked_threads list of another thread(B),
+if A has higher effective priority than B.If that is the case
+we set the effective_priority of B equal to the effective_priority of A.
+And then if B is being blocked by another thread, we recursively
+call change_priority to that thread as well. 
+ */
 static void change_priority(struct thread* t,int priority){
   t->effective_priority = priority;
   if(t->priority_receiver){
@@ -260,6 +267,14 @@ static void change_priority(struct thread* t,int priority){
 }
 
 
+/* Acquires LOCK, sleeping until it becomes available if
+   necessary.  The lock must not already be held by the current
+   thread.
+
+   This function may sleep, so it must not be called within an
+   interrupt handler.  This function may be called with
+   interrupts disabled, but interrupts will be turned back on if
+   we need to sleep. */
 void lock_acquire (struct lock *lock)
 {
   ASSERT (lock != NULL);
@@ -273,8 +288,7 @@ void lock_acquire (struct lock *lock)
       if(lock->holder->effective_priority<thread_current()->effective_priority){
 	change_priority(lock->holder,thread_current()->effective_priority);
       }
-    }
-  
+    } 
  
   sema_down (&lock->semaphore);   
   lock->holder = thread_current ();   
