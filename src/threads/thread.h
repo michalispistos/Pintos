@@ -146,5 +146,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 struct thread* highest_priority_thread_elem(struct list*);
+int highest_thread_priority_blocked_elem(struct list*);
 
 #endif /* threads/thread.h */

@@ -351,6 +351,20 @@ struct thread* highest_priority_thread_elem(struct list* list){
   return highest_priority_thread;
 }
 
+int highest_thread_priority_blocked_elem(struct list* list){
+
+  int highest_thread_priority = list_entry(list_begin(list),struct thread,blocked_elem)->effective_priority;
+  struct list_elem* e;
+  for(e = list_begin(list); e!=list_end(list); e=list_next(e)){
+    struct thread* t = list_entry(e,struct thread,blocked_elem);
+    if(t->effective_priority>highest_thread_priority){
+      highest_thread_priority = t->effective_priority;
+    }
+  }
+  return highest_thread_priority;
+}
+
+
 
 static void thread_set_effective_priority(int new_priority){
   
@@ -358,14 +372,7 @@ static void thread_set_effective_priority(int new_priority){
     thread_current()->effective_priority = new_priority;
   }
   else if(thread_current()->effective_priority > new_priority){
-    int highest_blocked_threads_priority = list_entry(list_begin(&thread_current()->blocked_threads),struct thread,blocked_elem)->effective_priority;
-    struct list_elem* e;
-    for(e = list_begin(&thread_current()->blocked_threads)->next;e!=list_end(&thread_current()->blocked_threads);e=list_next(e)){
-      struct thread* t = list_entry(e,struct thread,blocked_elem);
-      if(t->effective_priority>highest_blocked_threads_priority){
-	highest_blocked_threads_priority = t->effective_priority;
-      }
-    }
+    int highest_blocked_threads_priority = highest_thread_priority_blocked_elem(&thread_current()->blocked_threads);
     if(highest_blocked_threads_priority>new_priority){
       thread_current()->effective_priority = highest_blocked_threads_priority;
     }else{

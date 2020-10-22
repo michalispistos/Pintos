@@ -111,15 +111,7 @@ static void reduce_priority(struct thread* t){
 
   int highest_priority=0;
   if(!list_empty(&t->blocked_threads)){
-    highest_priority = list_entry(list_begin(&t->blocked_threads),struct thread,blocked_elem)->effective_priority;
-    struct list_elem* e;
-    for (e = list_begin (&t->blocked_threads)->next; e != list_end (&t->blocked_threads);
-	 e = list_next (e)) {
-      struct thread *t1 = list_entry (e, struct thread, blocked_elem);
-      if (t1->effective_priority > highest_priority) {
-        highest_priority = t1->effective_priority;
-      }
-    }
+    highest_priority = highest_thread_priority_blocked_elem(&t->blocked_threads);
   }
   if(highest_priority>t->base_priority){
     t->effective_priority=highest_priority;
