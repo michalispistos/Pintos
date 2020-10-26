@@ -27,13 +27,13 @@
 #define SUB_INT(x, n) (x - n * F)
 
 /* Multiplies a fixed point value (x) with another fixed point value (y) */
-#define MUL_FIXED(x, y) ((int64_t x)*F / y)
+#define MUL_FIXED(x, y) ( ((int64_t) x)*y / F)
 
 /* Multiplies a fixed point value (x) with an integer (n) */
 #define MUL_INT(x, n) (x * n)
 
 /* Divides a fixed point value (x) by another fixed point value (y) */
-#define DIV_FIXED(x, y) ((int64_t x)*F / y)
+#define DIV_FIXED(x, y) ( ((int64_t) x) *F / y)
 
 /* Divides a fixed point value (x) by an integer (n) */
 #define DIV_INT(x, n) (x / n)
