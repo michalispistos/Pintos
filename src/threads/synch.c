@@ -281,14 +281,16 @@ void lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-    
+
+if(!thread_mlfqs){
   if(lock->semaphore.value==0){      
       thread_current()->priority_receiver = lock->holder;
       list_push_back(&lock->holder->blocked_threads,&thread_current()->blocked_elem);
       if(lock->holder->effective_priority<thread_current()->effective_priority){
-	change_priority(lock->holder,thread_current()->effective_priority);
+	      change_priority(lock->holder,thread_current()->effective_priority);
       }
     } 
+}
  
   sema_down (&lock->semaphore);   
   lock->holder = thread_current ();   
