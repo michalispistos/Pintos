@@ -463,32 +463,53 @@ int thread_get_priority (void)
   return thread_current ()->effective_priority;
 }
 
+/* Calculates the new priority of a thread */
+static void 
+update_priority(struct thread *t){
+  int new_priority = PRI_MAX - ROUNDNEAR_INT (DIV_INT (thread_current ()->recent_cpu, 4)) - (thread_current ()->nice * 2);
+  ASSERT (new_priority >= 0 && new_priority <= 63);
+  t->effective_priority = new_priority;
+}
+
 /* Sets the current thread's nice value to NICE. */
-void thread_set_nice (int nice UNUSED) 
+void
+thread_set_nice (int nice) 
 {
-  /* Not yet implemented. */
+  ASSERT (nice >=-20 && nice <= 20);
+  thread_current ()->nice = nice;
+  update_priority (thread_current ());
+
+    int priority = 63;
+    while (priority >= 0 && list_empty(priority_queues_array[priority]))
+    {
+      priority--;
+    }
+
+  if (priority >= thread_current ()->effective_priority)
+  {
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
-int thread_get_load_avg (void) 
+int
+thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return ROUNDNEAR_INT(MUL_INT(load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
-int thread_get_recent_cpu (void) 
+int
+thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return ROUNDNEAR_INT(MUL_INT((thread_current ()->recent_cpu), 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -573,12 +594,14 @@ static void init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->effective_priority = priority;
   list_init(&t->blocked_threads); 
   t->priority_receiver = NULL;
-  t->base_priority = priority;
   t->magic = THREAD_MAGIC;
-  
+
+  if(!thread_mlfqs){
+  t->effective_priority = priority;
+  t->base_priority = priority;
+  }
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
 
@@ -586,7 +609,8 @@ static void init_thread (struct thread *t, const char *name, int priority)
   if (thread_mlfqs)
   {
     t->nice = thread_get_nice ();
-    t->recent_cpu = thread_get_recent_cpu();
+    t->recent_cpu = thread_current ()->recent_cpu;
+    update_priority(t);
   }
 
   intr_set_level (old_level);
