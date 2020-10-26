@@ -60,6 +60,7 @@ int load_avg;                   /* Load average for system. Treated as FIXED_POI
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
+#define TIMER_FREQ 100          /* # of timer ticks per second. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 /* If false (default), use round-robin scheduler.
@@ -156,11 +157,50 @@ size_t threads_ready (void)
   return list_size (&ready_list);      
 }
 
+static void 
+recalculate_recent_cpu (struct thread *t, void * aux UNUSED)
+{
+  /* Ignore if it is the idle thread because 
+     it is an unneeded calculation */
+  if (t != idle_thread){
+    int twice_load_avg = MUL_INT(load_avg, 2);
+    t->recent_cpu = ADD_FIXED((MUL_FIXED(DIV_FIXED(twice_load_avg, ADD_INT(twice_load_avg, 1)), t->recent_cpu)), t->nice);
+  }
+}
+
+/* Calculates the new priority of a thread */
+static void 
+update_priority (struct thread *t, void * aux UNUSED)
+{
+  int new_priority = PRI_MAX - ROUNDNEAR_INT (DIV_INT (thread_current ()->recent_cpu, 4)) - (thread_current ()->nice * 2);
+  ASSERT (new_priority >= 0 && new_priority <= 63);
+  t->effective_priority = new_priority;
+}
+
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void thread_tick (void) 
 {
   struct thread *t = thread_current ();
+
+  if (thread_mlfqs)
+  {
+    if ((idle_ticks + user_ticks + kernel_ticks + thread_ticks) % TIMER_FREQ == 0)
+    {
+      int ready_threads = threads_ready();
+      load_avg = ADD_FIXED(MUL_FIXED(DIV_INT(FIXPOINT(59), 60), load_avg), MUL_INT(DIV_INT(FIXPOINT(1), 60), ready_threads));
+      thread_foreach(&recalculate_recent_cpu, NULL);
+    }
+
+    if ((idle_ticks + user_ticks + kernel_ticks + thread_ticks) % TIME_SLICE == 0)
+    {
+      if (t != idle_thread)
+      {
+        t->recent_cpu = ADD_INT(t->recent_cpu, 1);
+        thread_foreach(&update_priority, NULL);
+      }
+    }
+  }
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -463,21 +503,13 @@ int thread_get_priority (void)
   return thread_current ()->effective_priority;
 }
 
-/* Calculates the new priority of a thread */
-static void 
-update_priority(struct thread *t){
-  int new_priority = PRI_MAX - ROUNDNEAR_INT (DIV_INT (thread_current ()->recent_cpu, 4)) - (thread_current ()->nice * 2);
-  ASSERT (new_priority >= 0 && new_priority <= 63);
-  t->effective_priority = new_priority;
-}
-
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice) 
 {
   ASSERT (nice >=-20 && nice <= 20);
   thread_current ()->nice = nice;
-  update_priority (thread_current ());
+  update_priority (thread_current (), NULL);
 
     int priority = 63;
     while (priority >= 0 && list_empty(priority_queues_array[priority]))
@@ -610,7 +642,7 @@ static void init_thread (struct thread *t, const char *name, int priority)
   {
     t->nice = thread_get_nice ();
     t->recent_cpu = thread_current ()->recent_cpu;
-    update_priority(t);
+    update_priority(t, NULL);
   }
 
   intr_set_level (old_level);
