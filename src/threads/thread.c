@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixedpoint.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -114,6 +115,19 @@ void thread_start (void)
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
+
+  /* The queues are malloced and initialised here.
+     They also join the array of queues here. */
+  for (int i = 0; i < 64; i++)
+  {
+    struct list *queue = malloc(sizeof(struct list));
+    if (queue == NULL)
+    {
+      PANIC ("Failed to allocate memory for priority queue.");
+    }
+    list_init (queue);
+    priority_queues_array[i] = queue;
+  }
 
   /* Start preemptive thread scheduling. */
   intr_enable ();
