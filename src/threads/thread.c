@@ -348,6 +348,10 @@ void thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  if (thread_mlfqs)
+  {
+    list_remove (&thread_current ()->queue_elem);
+  }
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -364,7 +368,13 @@ void thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
+  {
     list_push_back (&ready_list, &cur->elem);
+    if (thread_mlfqs)
+    {
+      list_push_back (priority_queues_array[cur->effective_priority], &cur->queue_elem);
+    }
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -601,13 +611,38 @@ static void *alloc_frame (struct thread *t, size_t size)
    idle_thread. */
 static struct thread *next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
-    return idle_thread;
-  else {
-    struct thread* chosen_thread = highest_priority_thread_elem(&ready_list);
-    list_remove (&chosen_thread->elem);
-    return chosen_thread;
+  if (thread_mlfqs)
+  {
+    int priority = 63;
+    while (priority >= 0 && list_empty(priority_queues_array[priority]))
+    {
+      priority--;
+    }
+    
+    /* All queues are empty */
+    if (priority == -1)
+    {
+      return idle_thread;
+    }
+    struct thread *next = list_entry(list_pop_front(priority_queues_array[priority]), struct thread, queue_elem);
+    list_remove(&next->elem);
+
+    return next;
+
+  } else
+  {
+    if (list_empty (&ready_list))
+    {
+      return idle_thread;
+    }
+    else 
+    {
+      struct thread* chosen_thread = highest_priority_thread_elem(&ready_list);
+      list_remove (&chosen_thread->elem);
+      return chosen_thread;
+    }
   }
+
 }
 
 /* Completes a thread switch by activating the new thread's page
