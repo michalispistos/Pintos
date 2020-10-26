@@ -125,7 +125,7 @@ void thread_start (void)
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
-  thread_create ("idle", PRI_MIN, idle, &idle_started);
+  thread_create ("idle", PRI_MIN, idle, &idle_started);  
 
   /* The queues are malloced and initialised here.
      They also join the array of queues here. */
@@ -261,6 +261,14 @@ void thread_block (void)
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
+  if (thread_mlfqs)
+  {
+    if (*thread_current() ->name != 'i')
+    {
+      list_remove(&thread_current()->queue_elem);
+    }
+  }
+
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
@@ -283,6 +291,15 @@ void thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+
+  if (thread_mlfqs)
+  {
+    /* Add to priority_queue */
+    if (*t->name != 'i')
+    {
+      list_push_back(priority_queues_array[t->effective_priority], &t->queue_elem);
+    }
+  }
   intr_set_level (old_level);
 }
 
