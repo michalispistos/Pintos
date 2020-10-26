@@ -95,10 +95,15 @@ struct thread
     int effective_priority;             /* efective priority. */
     struct list_elem allelem;           /* List element for all threads list. */
     int time_to_wake_up;                /* The time when the thread must wake up if it's asleep*/
-    struct list_elem sleep_elem; 	 /* List element for sleep_list*/ 	
-    struct semaphore sema;             /*A semaphore  that blocks that thread*/ 
+    struct list_elem sleep_elem; 	    /* List element for sleep_list*/ 	
+    struct semaphore sema;              /*A semaphore  that blocks that thread*/ 
+    struct list_elem queue_elem;        /* List element for priority queue */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    /* Values for BSD scheduler */
+   int nice;       /* The thread's nice value. */
+   int recent_cpu; /* Value indicating how much CPU time the thread has used recently */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
