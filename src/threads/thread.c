@@ -30,6 +30,10 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* Array of queues of threads. Each queue contains threads of
+the same priority - from 63 to 0. */
+static struct list* priority_queues_array[64];
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -389,6 +393,7 @@ void thread_set_priority (int new_priority)
 
   thread_current()->base_priority = new_priority;
  
+
   thread_set_effective_priority(new_priority);
   
   if(highest_priority_thread_elem(&ready_list)->effective_priority>=thread_get_priority()){
