@@ -101,16 +101,21 @@ void thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
 
-  /* Initialise load average to 0 */
-  load_avg = 0;
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  initial_thread->nice = 0;
-  initial_thread->recent_cpu = 0;
+  
+  if (thread_mlfqs)
+  {
+    /* Initialise load average to 0 */
+    load_avg = 0;
+  
+    initial_thread->nice = 0;
+    initial_thread->recent_cpu = 0;
+  }
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -124,15 +129,18 @@ void thread_start (void)
 
   /* The queues are malloced and initialised here.
      They also join the array of queues here. */
-  for (int i = 0; i < 64; i++)
+  if (thread_mlfqs)
   {
-    struct list *queue = malloc(sizeof(struct list));
-    if (queue == NULL)
+    for (int i = 0; i < 64; i++)
     {
-      PANIC ("Failed to allocate memory for priority queue.");
+      struct list *queue = malloc(sizeof(struct list));
+      if (queue == NULL)
+      {
+        PANIC ("Failed to allocate memory for priority queue.");
+      }
+      list_init (queue);
+      priority_queues_array[i] = queue;
     }
-    list_init (queue);
-    priority_queues_array[i] = queue;
   }
 
   /* Start preemptive thread scheduling. */
@@ -546,6 +554,13 @@ static void init_thread (struct thread *t, const char *name, int priority)
   
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+
+  /* The new thread inherits the parent thread's nice and recent_cpu value. */
+  if (thread_mlfqs)
+  {
+    t->nice = thread_get_nice ();
+    t->recent_cpu = thread_get_recent_cpu();
+  }
 
   intr_set_level (old_level);
 }
