@@ -1,6 +1,6 @@
-#define P 17
-#define Q 14
-#define F (1 << Q)
+/* Number used for fixed point arithmetic. Related to 
+   number of digits before binary point */
+#define F (1 << 14)
 
 /* Macros used for fixed point arithmetic
    required for the advanced scheduler. */
@@ -27,13 +27,13 @@
 #define SUB_INT(x, n) (x - n * F)
 
 /* Multiplies a fixed point value (x) with another fixed point value (y) */
-#define MUL_FIXED(x, y) ( ((int64_t) x)*y / F)
+#define MUL_FIXED(x, y) (((int64_t)x) * y / F)
 
 /* Multiplies a fixed point value (x) with an integer (n) */
 #define MUL_INT(x, n) (x * n)
 
 /* Divides a fixed point value (x) by another fixed point value (y) */
-#define DIV_FIXED(x, y) ( ((int64_t) x) *F / y)
+#define DIV_FIXED(x, y) (((int64_t)x) * F / y)
 
 /* Divides a fixed point value (x) by an integer (n) */
 #define DIV_INT(x, n) (x / n)
