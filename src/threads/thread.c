@@ -33,7 +33,7 @@ static struct list all_list;
 
 /* Array of queues of threads. Each queue contains threads of
 the same priority - from 63 to 0. */
-static struct list* priority_queues_array[64];
+static struct list priority_queues_array[64];
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -114,8 +114,8 @@ void thread_init (void)
     /* Initialise load average to 0 */
     load_avg = 0;
   
-    initial_thread->nice = 0;
-    initial_thread->recent_cpu = 0;
+   //  initial_thread->nice = 0;
+   // initial_thread->recent_cpu = 0;
   }
 }
 
@@ -134,13 +134,7 @@ void thread_start (void)
   {
     for (int i = 0; i < 64; i++)
     {
-      struct list *queue = malloc(sizeof(struct list));
-      if (queue == NULL)
-      {
-        PANIC ("Failed to allocate memory for priority queue.");
-      }
-      list_init (queue);
-      priority_queues_array[i] = queue;
+      list_init (&priority_queues_array[i]);
     }
   }
 
@@ -337,7 +331,7 @@ void thread_unblock (struct thread *t)
     /* Add to priority_queue */
     if (*t->name != 'i')
     {
-      list_push_back(priority_queues_array[t->effective_priority], &t->queue_elem);
+      list_push_back(&priority_queues_array[t->effective_priority], &t->queue_elem);
     }
   }
   intr_set_level (old_level);
@@ -388,10 +382,10 @@ void thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  if (thread_mlfqs)
-  {
-    list_remove (&thread_current ()->queue_elem);
-  }
+  // if (thread_mlfqs)
+  // {
+  //   list_remove (&thread_current ()->queue_elem);
+  // }
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -412,7 +406,7 @@ void thread_yield (void)
     list_push_back (&ready_list, &cur->elem);
     if (thread_mlfqs)
     {
-      list_push_back (priority_queues_array[cur->effective_priority], &cur->queue_elem);
+      list_push_back (&priority_queues_array[cur->effective_priority], &cur->queue_elem);
     }
   }
   cur->status = THREAD_READY;
@@ -512,7 +506,7 @@ thread_set_nice (int nice)
   update_priority (thread_current (), NULL);
 
     int priority = 63;
-    while (priority >= 0 && list_empty(priority_queues_array[priority]))
+    while (priority >= 0 && list_empty(&priority_queues_array[priority]))
     {
       priority--;
     }
@@ -640,8 +634,14 @@ static void init_thread (struct thread *t, const char *name, int priority)
   /* The new thread inherits the parent thread's nice and recent_cpu value. */
   if (thread_mlfqs)
   {
-    t->nice = thread_get_nice ();
-    t->recent_cpu = thread_current ()->recent_cpu;
+    if(t == initial_thread)
+    {
+      t->nice = 0;
+      t->recent_cpu = 0;
+    } else {
+      t->nice = thread_get_nice ();
+      t->recent_cpu = thread_current ()->recent_cpu;
+    }
     update_priority(t, NULL);
   }
 
@@ -670,7 +670,7 @@ static struct thread *next_thread_to_run (void)
   if (thread_mlfqs)
   {
     int priority = 63;
-    while (priority >= 0 && list_empty(priority_queues_array[priority]))
+    while (priority >= 0 && list_empty(&priority_queues_array[priority]))
     {
       priority--;
     }
@@ -680,7 +680,7 @@ static struct thread *next_thread_to_run (void)
     {
       return idle_thread;
     }
-    struct thread *next = list_entry(list_pop_front(priority_queues_array[priority]), struct thread, queue_elem);
+    struct thread *next = list_entry(list_pop_front(&priority_queues_array[priority]), struct thread, queue_elem);
     list_remove(&next->elem);
 
     return next;
