@@ -139,9 +139,7 @@ void thread_start (void)
   intr_enable ();
 
   /* Wait for the idle thread to initialize idle_thread. */
-  sema_down (&idle_started);
-
-  
+  sema_down (&idle_started);  
 }
 
 /* Returns the number of threads currently in the ready list */
@@ -320,10 +318,10 @@ void thread_unblock (struct thread *t)
   if (thread_mlfqs)
   {
     /* Add to priority_queue */
-    if (idle_thread == NULL || *t->name != 'i')
-    {
+    //if ((idle_thread == NULL && *t->name == 'i') || *t->name != 'i')
+    //{
       list_push_back(&priority_queues_array[t->effective_priority], &t->queue_elem);
-    }
+    //}
   }
   intr_set_level (old_level);
 }
@@ -616,8 +614,8 @@ static void init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   if(!thread_mlfqs){
-  t->effective_priority = priority;
-  t->base_priority = priority;
+    t->effective_priority = priority;
+    t->base_priority = priority;
   }
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -625,7 +623,7 @@ static void init_thread (struct thread *t, const char *name, int priority)
   /* The new thread inherits the parent thread's nice and recent_cpu value. */
   if (thread_mlfqs)
   {
-    if(*t->name == 'm')
+    if(*name == 'm')
     {
       t->nice = 0;
       t->recent_cpu = 0;
