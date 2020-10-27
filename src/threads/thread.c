@@ -113,9 +113,6 @@ void thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-
-   //  initial_thread->nice = 0;
-   // initial_thread->recent_cpu = 0;
 }
 
 
@@ -699,6 +696,8 @@ static struct thread *next_thread_to_run (void)
       list_remove (&chosen_thread->elem);
       return chosen_thread;
     }
+  }
+}
 
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
