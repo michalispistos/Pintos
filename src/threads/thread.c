@@ -102,17 +102,23 @@ void thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   
-  if (thread_mlfqs)
-  {
-    /* Initialise load average to 0 */
-    load_avg = 0;
-  }
-  
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  /* The queues are malloced and initialised here.
+     They also join the array of queues here. */
+  if (thread_mlfqs)
+  {
+    for (int i = 0; i < 64; i++)
+    {
+      list_init (&priority_queues_array[i]);
+    }
+
+     load_avg = 0;
+  }
 }
 
 
@@ -120,16 +126,6 @@ void thread_init (void)
    Also creates the idle thread. */
 void thread_start (void) 
 {
-  /* The queues are malloced and initialised here.
-     They also join the array of queues here. */
-    if (thread_mlfqs)
-    {
-      for (int i = 0; i < 64; i++)
-      {
-        list_init (&priority_queues_array[i]);
-      }
-    }
-
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
@@ -165,9 +161,10 @@ update_priority (struct thread *t, void * aux UNUSED)
 {
   if (*t->name != 'i')
   {
-  int new_priority = ROUNDNEAR_INT(SUB_FIXED(FIXPOINT(PRI_MAX), (ADD_INT(DIV_INT (thread_current ()->recent_cpu, 4), (thread_current ()->nice * 2)))));
-  // printf("%s | PRIORITY : %d | RECENTCPU : %d | NICE : %d | LOADAVG: %d | READYTHREADS : %u\n", t->name, new_priority, ROUNDNEAR_INT(t->recent_cpu), t->nice, load_avg, threads_ready());
-  ASSERT (new_priority >= 0 && new_priority <= 63);
+  int new_priority = ROUNDNEAR_INT(SUB_FIXED(FIXPOINT(PRI_MAX), (ADD_INT(DIV_INT (t->recent_cpu, 4), (t->nice * 2)))));
+  //printf("%s | PRIORITY : %d | RECENTCPU : %d | NICE : %d | LOADAVG: %d | READYTHREADS : %u\n", t->name, new_priority, ROUNDNEAR_INT(t->recent_cpu), t->nice, load_avg, threads_ready());
+  if (new_priority > 63) new_priority = PRI_MAX;
+  if (new_priority < 0) new_priority = PRI_MIN;
   t->effective_priority = new_priority;
   }
 }
@@ -206,8 +203,8 @@ void thread_tick (void)
       if (t != idle_thread)
       {
         t->recent_cpu = ADD_INT(t->recent_cpu, 1);
-        thread_foreach(&update_priority, NULL);
       }
+      thread_foreach(&update_priority, NULL);
     }
   }
 
@@ -477,6 +474,9 @@ static void thread_set_effective_priority(int new_priority){
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority (int new_priority) 
 {
+  if(thread_mlfqs){
+    return;
+  }
   thread_current()->base_priority = new_priority;
   thread_set_effective_priority(new_priority);
   if (highest_priority_thread_elem(&ready_list)->effective_priority>=thread_get_priority())
@@ -499,11 +499,11 @@ thread_set_nice (int nice)
   thread_current ()->nice = nice;
   update_priority (thread_current (), NULL);
 
-    int priority = 63;
-    while (priority >= 0 && list_empty(&priority_queues_array[priority]))
-    {
-      priority--;
-    }
+  int priority = 63;
+  while (priority >= 0 && list_empty(&priority_queues_array[priority]))
+  {
+    priority--;
+  }
 
   if (priority >= thread_current ()->effective_priority)
   {
@@ -693,7 +693,6 @@ static struct thread *next_thread_to_run (void)
     }
   }
 }
-
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
