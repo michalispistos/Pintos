@@ -101,23 +101,23 @@ void thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-
-
-  /* Set up a thread structure for the running thread. */
-  initial_thread = running_thread ();
-  init_thread (initial_thread, "main", PRI_DEFAULT);
-  initial_thread->status = THREAD_RUNNING;
-  initial_thread->tid = allocate_tid ();
   
   if (thread_mlfqs)
   {
     /* Initialise load average to 0 */
     load_avg = 0;
+  }
   
+  /* Set up a thread structure for the running thread. */
+  initial_thread = running_thread ();
+  init_thread (initial_thread, "main", PRI_DEFAULT);
+  initial_thread->status = THREAD_RUNNING;
+  initial_thread->tid = allocate_tid ();
+
    //  initial_thread->nice = 0;
    // initial_thread->recent_cpu = 0;
-  }
 }
+
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
@@ -130,13 +130,13 @@ void thread_start (void)
 
   /* The queues are malloced and initialised here.
      They also join the array of queues here. */
-  if (thread_mlfqs)
-  {
-    for (int i = 0; i < 64; i++)
+    if (thread_mlfqs)
     {
-      list_init (&priority_queues_array[i]);
+      for (int i = 0; i < 64; i++)
+      {
+        list_init (&priority_queues_array[i]);
+      }
     }
-  }
 
   /* Start preemptive thread scheduling. */
   intr_enable ();
@@ -297,7 +297,7 @@ void thread_block (void)
 
   if (thread_mlfqs)
   {
-    if (*thread_current() ->name != 'i')
+    if (*thread_current()->name != 'i')
     {
       list_remove(&thread_current()->queue_elem);
     }
@@ -401,12 +401,12 @@ void thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+  if (*cur->name != 'i') 
   {
     list_push_back (&ready_list, &cur->elem);
     if (thread_mlfqs)
     {
-      list_push_back (&priority_queues_array[cur->effective_priority], &cur->queue_elem);
+     list_push_back (&priority_queues_array[cur->effective_priority], &cur->queue_elem);
     }
   }
   cur->status = THREAD_READY;
@@ -634,15 +634,17 @@ static void init_thread (struct thread *t, const char *name, int priority)
   /* The new thread inherits the parent thread's nice and recent_cpu value. */
   if (thread_mlfqs)
   {
-    if(t == initial_thread)
+    if(*t->name == 'm')
     {
       t->nice = 0;
       t->recent_cpu = 0;
+      t->effective_priority = PRI_MAX;
     } else {
       t->nice = thread_get_nice ();
       t->recent_cpu = thread_current ()->recent_cpu;
+      update_priority(t, NULL);
     }
-    update_priority(t, NULL);
+    
   }
 
   intr_set_level (old_level);
@@ -697,9 +699,6 @@ static struct thread *next_thread_to_run (void)
       list_remove (&chosen_thread->elem);
       return chosen_thread;
     }
-  }
-
-}
 
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
