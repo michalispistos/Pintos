@@ -57,6 +57,7 @@ static long long idle_ticks;   /* # of timer ticks spent idle. */
 static long long kernel_ticks; /* # of timer ticks in kernel threads. */
 static long long user_ticks;   /* # of timer ticks in user programs. */
 int load_avg;                  /* Load average for system. Treated as FIXED_POINT */
+static int number_of_threads_in_queue_array; /* Number of threads held in queue array */
 
 /* Scheduling. */
 #define TIME_SLICE 4          /* # of timer ticks to give each thread. */
@@ -68,7 +69,8 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-mlfqs". */
 bool thread_mlfqs;
 
-static struct lock multi_purpose_lock;
+
+static struct lock multi_purpose_lock; /* A lock for thread_set_effective_priority and thread_set_nice */
 
 static void kernel_thread(thread_func *, void *aux);
 
@@ -121,6 +123,7 @@ void thread_init(void)
     }
 
     load_avg = 0;
+    number_of_threads_in_queue_array = 0;
   }
 }
 
@@ -149,13 +152,9 @@ size_t threads_ready(void)
   }
   else
   {
-    int res = 0;
-    for (int i = 0; i < 64; ++i)
-    {
-      res += list_size(&priority_queues_array[i]);
-    }
-    return res;
+    return number_of_threads_in_queue_array;
   }
+    
 }
 
 static void
@@ -221,9 +220,12 @@ void thread_tick(void)
           ready_threads++;
         load_avg = ADD_FIXED(MUL_FIXED(DIV_INT(FIXPOINT(59), 60), load_avg), MUL_INT(DIV_INT(FIXPOINT(1), 60), ready_threads));
         thread_foreach(&recalculate_recent_cpu, NULL);
+        thread_foreach(&update_priority, NULL);
+      } else 
+      {
+        update_priority(t, NULL);
       }
-      thread_foreach(&update_priority, NULL);
-    }
+    } 
   }
 
   /* Enforce preemption. */
@@ -340,6 +342,7 @@ void thread_unblock(struct thread *t)
   if (thread_mlfqs)
   {
     list_push_back(&priority_queues_array[t->effective_priority], &t->elem);
+    number_of_threads_in_queue_array++;
   }
   else
   {
@@ -416,6 +419,7 @@ void thread_yield(void)
     if (thread_mlfqs)
     {
       list_push_back(&priority_queues_array[cur->effective_priority], &cur->elem);
+      number_of_threads_in_queue_array++;
     }
     else
     {
@@ -444,7 +448,7 @@ void thread_foreach(thread_action_func *func, void *aux)
 }
 
 /*Return the highest_priority_thread from a list of elems*/
-struct thread *highest_priority_thread_elem(struct list *list)
+struct thread *highest_priority_thread(struct list *list)
 {
 
   struct thread *highest_priority_thread = list_entry(list_begin(list), struct thread, elem);
@@ -461,7 +465,7 @@ struct thread *highest_priority_thread_elem(struct list *list)
 }
 
 /*Return the highest_thread_priority from a list of blocked_elems*/
-int highest_thread_priority_blocked_elem(struct list *list)
+int highest_blocked_thread_priority(struct list *list)
 {
 
   int highest_thread_priority = list_entry(list_begin(list), struct thread, blocked_elem)->effective_priority;
@@ -480,14 +484,14 @@ int highest_thread_priority_blocked_elem(struct list *list)
 /*sets the effective_priority when base_priority is modified*/
 void thread_set_effective_priority(struct thread *t, int new_priority)
 {
-
+  lock_acquire(&multi_purpose_lock);  
   if (t->effective_priority < new_priority || list_empty(&t->blocked_threads))
   {
     t->effective_priority = new_priority;
   }
   else if (t->effective_priority > new_priority)
   {
-    int highest_blocked_threads_priority = highest_thread_priority_blocked_elem(&t->blocked_threads);
+    int highest_blocked_threads_priority = highest_blocked_thread_priority(&t->blocked_threads);
     if (highest_blocked_threads_priority > new_priority)
     {
       t->effective_priority = highest_blocked_threads_priority;
@@ -497,6 +501,7 @@ void thread_set_effective_priority(struct thread *t, int new_priority)
       t->effective_priority = new_priority;
     }
   }
+  lock_release(&multi_purpose_lock);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -507,10 +512,10 @@ void thread_set_priority(int new_priority)
     return;
   }
   thread_current()->base_priority = new_priority;
-  lock_acquire(&multi_purpose_lock);
+  
   thread_set_effective_priority(thread_current(), new_priority);
-  lock_release(&multi_purpose_lock);
-  if (highest_priority_thread_elem(&ready_list)->effective_priority > thread_get_priority())
+  
+  if (highest_priority_thread(&ready_list)->effective_priority > thread_get_priority())
   {
     thread_yield();
   }
@@ -712,6 +717,7 @@ static struct thread *next_thread_to_run(void)
       return idle_thread;
     }
     struct thread *next = list_entry(list_pop_front(&priority_queues_array[priority]), struct thread, elem);
+    number_of_threads_in_queue_array--;
     return next;
   }
   else
@@ -722,7 +728,7 @@ static struct thread *next_thread_to_run(void)
     }
     else
     {
-      struct thread *chosen_thread = highest_priority_thread_elem(&ready_list);
+      struct thread *chosen_thread = highest_priority_thread(&ready_list);
       list_remove(&chosen_thread->elem);
       return chosen_thread;
     }
