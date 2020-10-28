@@ -122,7 +122,8 @@ static void reduce_priority(struct thread *t)
     thread_set_effective_priority(t, t->base_priority);
   }
 
-/* If thread has a priority_receiver, recursively calls reduce_priority() to handle nested donations*/ 
+  /* If thread has a priority_receiver, recursively 
+calls reduce_priority() to handle nested donations*/
   if (t->priority_receiver)
   {
     reduce_priority(t->priority_receiver);
@@ -145,10 +146,11 @@ void sema_up(struct semaphore *sema)
     chosen_thread = highest_priority_thread(&sema->waiters);
     list_remove(&chosen_thread->elem);
 
- /* If in advanced scheduler or not a lock's semaphore, priority receiver is always NULL. 
-    If the chosen_thread has donated priority, it is removed from the blocked_threads list
-    and every thread that waited for the lock will be added to the chosen_thread's blocked_threads list */
-    if (chosen_thread->priority_receiver)
+    /* If in advanced scheduler or not a lock's semaphore, priority 
+    receiver is always NULL. If the chosen_thread has donated priority,
+    it is removed from the blocked_threads listand every thread that waited 
+    for the lock will be added to the chosen_thread's blocked_threads list */
+    if (!thread_mlfqs && chosen_thread->priority_receiver)
     {
       struct thread *previous_receiver = chosen_thread->priority_receiver;
       chosen_thread->priority_receiver = NULL;
@@ -219,8 +221,7 @@ void sema_self_test(void)
 }
 
 /* Thread function used by sema_self_test(). */
-static void
-sema_test_helper(void *sema_)
+static void sema_test_helper(void *sema_)
 {
   struct semaphore *sema = sema_;
   int i;
@@ -418,7 +419,7 @@ void cond_signal(struct condition *cond, struct lock *lock UNUSED)
   ASSERT(!intr_context());
   ASSERT(lock_held_by_current_thread(lock));
 
-  /* Calls sema_up on the semaphore that has the highest priority thread. */ 
+  /* Calls sema_up on the semaphore that has the highest priority thread. */
   if (!list_empty(&cond->waiters))
   {
     struct semaphore_elem *chosen_sem_elem = list_entry(list_begin(&cond->waiters), struct semaphore_elem, elem);
