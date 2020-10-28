@@ -94,7 +94,7 @@ struct thread
    struct semaphore sema;       /* A semaphore  that blocks that thread. */
 
    /* Shared between thread.c and synch.c. */
-   struct list_elem elem; /* List element. */
+   struct list_elem elem;       /* List element. */
 
    /* Values for priority scheduler */
    int base_priority;                /* Base priority only used for priority donation. */
