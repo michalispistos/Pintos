@@ -100,21 +100,18 @@ bool sema_try_down(struct semaphore *sema)
   return success;
 }
 
-/* This function is called when we remove the a thread(A) from 
+/* This function is called when we remove a thread(A) from 
 the blocked_thread lists of another thread(B),
 if these threads have the same effective_priority. 
 If that is the case then since A is not donating priority to B anymore,
-we set B's effecetive_priority to the highest priority 
-between the blocked_threads and its base_priority.
- */
-
+we set B's effective_priority to the highest priority 
+between the blocked_threads and its base_priority. */
 static void reduce_priority(struct thread *t)
 {
-
   int highest_priority = 0;
   if (!list_empty(&t->blocked_threads))
   {
-    highest_priority = highest_thread_priority_blocked_elem(&t->blocked_threads);
+    highest_priority = highest_blocked_thread_priority(&t->blocked_threads);
   }
   if (highest_priority > t->base_priority)
   {
@@ -125,6 +122,7 @@ static void reduce_priority(struct thread *t)
     thread_set_effective_priority(t, t->base_priority);
   }
 
+/* If thread has a priority_receiver, recursively calls reduce_priority() to handle nested donations*/ 
   if (t->priority_receiver)
   {
     reduce_priority(t->priority_receiver);
@@ -133,7 +131,6 @@ static void reduce_priority(struct thread *t)
 
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
-
    This function may be called from an interrupt handler. */
 void sema_up(struct semaphore *sema)
 {
@@ -145,10 +142,12 @@ void sema_up(struct semaphore *sema)
 
   if (!list_empty(&sema->waiters))
   {
-
-    chosen_thread = highest_priority_thread_elem(&sema->waiters);
+    chosen_thread = highest_priority_thread(&sema->waiters);
     list_remove(&chosen_thread->elem);
 
+ /* If in advanced scheduler or not a lock's semaphore, priority receiver is always NULL. 
+    If the chosen_thread has donated priority, it is removed from the blocked_threads list
+    and every thread that waited for the lock will be added to the chosen_thread's blocked_threads list */
     if (chosen_thread->priority_receiver)
     {
       struct thread *previous_receiver = chosen_thread->priority_receiver;
@@ -172,7 +171,7 @@ void sema_up(struct semaphore *sema)
           e1 = temp;
         }
       }
-
+      /* Reduce priority of the thread that held the lock previously if needed */
       if (chosen_thread->effective_priority == previous_receiver->effective_priority)
       {
         reduce_priority(previous_receiver);
@@ -183,7 +182,7 @@ void sema_up(struct semaphore *sema)
 
   sema->value++;
 
-  if (chosen_thread && chosen_thread->effective_priority >= thread_get_priority())
+  if (chosen_thread && chosen_thread->effective_priority > thread_get_priority())
   {
     if (!intr_context())
     {
@@ -256,13 +255,11 @@ void lock_init(struct lock *lock)
   sema_init(&lock->semaphore, 1);
 }
 
-/*This function is called when a new thread(A) is
- added to the blocked_threads list of another thread(B),
-if A has higher effective priority than B.If that is the case
-we set the effective_priority of B equal to the effective_priority of A.
-And then if B is being blocked by another thread, we recursively
-call change_priority to that thread as well. 
- */
+/* This function is called when a new thread(A) is
+   added to the blocked_threads list of another thread(B) whose effective priority
+   is lower than that of A. In that case we set the effective_priority of B equal 
+   to the effective_priority of A. Then if B is being blocked by another 
+   thread, we recursively call change_priority to that thread as well. */
 static void change_priority(struct thread *t, int priority)
 {
   thread_set_effective_priority(t, priority);
@@ -291,6 +288,8 @@ void lock_acquire(struct lock *lock)
 
   if (!thread_mlfqs)
   {
+    /* If lock is being held by another thread, the current thread is added
+    to the blocked_threads list of the lock holder, and priority is donated if needed. */
     if (lock->semaphore.value == 0)
     {
       thread_current()->priority_receiver = lock->holder;
@@ -419,6 +418,7 @@ void cond_signal(struct condition *cond, struct lock *lock UNUSED)
   ASSERT(!intr_context());
   ASSERT(lock_held_by_current_thread(lock));
 
+  /* Calls sema_up on the semaphore that has the highest priority thread. */ 
   if (!list_empty(&cond->waiters))
   {
     struct semaphore_elem *chosen_sem_elem = list_entry(list_begin(&cond->waiters), struct semaphore_elem, elem);
