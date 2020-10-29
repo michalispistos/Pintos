@@ -104,7 +104,8 @@ bool sema_try_down(struct semaphore *sema)
 the blocked_thread lists of another thread(B),
 if these threads have the same effective_priority. 
 If that is the case then since A is not donating priority to B anymore,
-we have to reset B's effective_priority. */
+so we have to reset B's effective_priority. If the thread has a
+receiver, then we are in the nested case so we recurse. */
 static void reduce_priority(struct thread *t)
 {
   thread_set_effective_priority(t, t->base_priority);
