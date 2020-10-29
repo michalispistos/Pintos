@@ -117,7 +117,7 @@ void thread_init(void)
      are initialised. */
   if (thread_mlfqs)
   {
-    for (int i = 0; i < 64; i++)
+    for (int i = PRI_MIN; i <= PRI_MAX; i++)
     {
       list_init(&priority_queues_array[i]);
     }
@@ -176,11 +176,11 @@ static void update_priority(struct thread *t, void *aux UNUSED)
   if (t != idle_thread)
   {
     int new_priority = ROUNDNEAR_INT(SUB_FIXED(FIXPOINT(PRI_MAX), (ADD_INT(DIV_INT(t->recent_cpu, 4), (t->nice * 2)))));
-    if (new_priority > 63)
+    if (new_priority > PRI_MAX)
     {
       new_priority = PRI_MAX;
     }
-    if (new_priority < 0)
+    if (new_priority < PRI_MIN)
     {
       new_priority = PRI_MIN;
     }
@@ -549,8 +549,8 @@ void thread_set_nice(int nice)
   thread_current()->nice = nice;
   update_priority(thread_current(), NULL);
 
-  int priority = 63;
-  while (priority >= 0 && list_empty(&priority_queues_array[priority]))
+  int priority = PRI_MAX;
+  while (priority >= PRI_MIN && list_empty(&priority_queues_array[priority]))
   {
     priority--;
   }
@@ -718,8 +718,8 @@ static struct thread *next_thread_to_run(void)
 {
   if (thread_mlfqs)
   {
-    int priority = 63;
-    while (priority >= 0 && list_empty(&priority_queues_array[priority]))
+    int priority = PRI_MAX;
+    while (priority >= PRI_MIN && list_empty(&priority_queues_array[priority]))
     {
       priority--;
     }
