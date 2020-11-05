@@ -118,7 +118,7 @@ process_exit (void)
 
 /* Sets up the CPU for running user code in the current
    thread.
-   This function is called on every context switch. */
+  This function is called on every context switch. */
 void
 process_activate (void)
 {
@@ -445,7 +445,9 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+	//CHANGED
+        *esp = PHYS_BASE-12;
+        //
       else
         palloc_free_page (kpage);
     }
