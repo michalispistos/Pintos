@@ -6,8 +6,12 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include <inttypes.h>
+#include "lib/stdio.h"
 
 typedef int pid_t;
+
+/* The maximum size for a single buffer to be written to the console. */
+#define MAX_SINGLE_BUFFER_SIZE (200)
 
 static void syscall_handler(struct intr_frame *);
 
@@ -19,7 +23,8 @@ void syscall_init(void)
 // static void halt(void) {}
 
 /* Terminates the current user program */
-static void exit(int status)
+static void
+exit(int status)
 {
   printf("%s: exit%08" PRId32 "\n", thread_current()->name, status);
   thread_exit();
@@ -39,7 +44,26 @@ static void exit(int status)
 
 // static int read(int fd, void *buffer, unsigned size) {}
 
-// static int write(int fd, const void *buffer, unsigned size) {}
+/* Writes size bytes from buffer to the open file fd.
+  Currently it can only write to console
+TODO: implement full 
+*/
+static int
+write(int fd, const void *buffer, unsigned size)
+{
+  int tracker = 0;
+  if (fd == STDOUT_FILENO)
+  {
+    while (size > MAX_SINGLE_BUFFER_SIZE)
+    {
+      putbuf(buffer + tracker, MAX_SINGLE_BUFFER_SIZE);
+      tracker += MAX_SINGLE_BUFFER_SIZE;
+      size -= MAX_SINGLE_BUFFER_SIZE;
+    }
+    putbuf(buffer + tracker, size);
+  }
+  return size;
+}
 
 // static void seek(int fd, unsigned position) {}
 
