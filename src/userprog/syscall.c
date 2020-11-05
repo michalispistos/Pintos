@@ -26,7 +26,7 @@ void syscall_init(void)
 static void
 exit(int status)
 {
-  printf("%s: exit%08" PRId32 "\n", thread_current()->name, status);
+  printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_exit();
 }
 
@@ -94,6 +94,6 @@ static void
 syscall_handler(struct intr_frame *f)
 {
   int syscall_num = *(int *)(f->esp);
-  printf("The syscall number is: %08" PRIu32 "\n", syscall_num);
+  printf("The syscall number is: %d\n", syscall_num);
   exit(0);
 }
