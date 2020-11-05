@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include <inttypes.h>
 
 typedef int pid_t;
 
@@ -15,10 +16,15 @@ void syscall_init(void)
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+/* Retrieve the system call number, then any system call arguments, 
+  and carry out appropriate actions
+TODO: Implement fully
+*/
 static void
-syscall_handler(struct intr_frame *f UNUSED)
+syscall_handler(struct intr_frame *f)
 {
-  printf("system call!\n");
+  int syscall_num = *(int *)(f->esp);
+  printf("The syscall number is: %08" PRIu32 "\n", syscall_num);
   thread_exit();
 }
 
