@@ -37,10 +37,21 @@ tid_t process_execute(const char *file_name)
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
+  char *token, *save_ptr;
+  char **args = palloc_get_page(0);
+  int i = 0;
+  for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr))
+       {         
+         args[i] = token;
+         ++i;
+       }
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create(args[1], PRI_DEFAULT, start_process, args);
   if (tid == TID_ERROR)
-    palloc_free_page(fn_copy);
+  {
+    palloc_free_page(args);
+  }
   return tid;
 }
 
@@ -49,7 +60,7 @@ tid_t process_execute(const char *file_name)
 static void
 start_process(void *file_name_)
 {
-  char *file_name = file_name_;
+  char **file_name = file_name_;
   struct intr_frame if_;
   bool success;
 
@@ -58,7 +69,18 @@ start_process(void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load(file_name, &if_.eip, &if_.esp);
+  success = load(file_name[0], &if_.eip, &if_.esp);
+
+/*
+i Push the arguments onto the stack, one by one, in reverse order
+ii Push a null pointer sentinel (0)
+iii Push pointers to the arguments (again in reverse)
+iv Push a pointer to the first pointer
+v Push the number of arguments
+vi Push a fake return address (0)
+*/
+  
+  
 
   /* If load failed, quit. */
   palloc_free_page(file_name);
