@@ -79,7 +79,26 @@ iv Push a pointer to the first pointer
 v Push the number of arguments
 vi Push a fake return address (0)
 */
-  
+  /*Creating stack*/
+  int argc = 0;
+  while(file_name[argc]!=NULL){
+    argc++;
+  }
+  for(int i=argc-1;i>=0;--i){
+    if_.esp = &file_name[i];
+    --if_.esp;
+  }
+  if_.esp = &"\0";
+  for(int i=argc-1;i>=0;--i){
+    * (char***)if_.esp = &file_name[i];
+    --if_.esp;
+  }
+  char** address_args_0 = &file_name[0]; 
+  * (char****) if_.esp  = &address_args_0;
+  --if_.esp;
+  if_.esp = &argc;
+  --if_.esp;
+  if_.esp = &"\0";
   
 
   /* If load failed, quit. */
