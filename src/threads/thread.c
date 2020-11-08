@@ -694,6 +694,13 @@ static void init_thread(struct thread *t, const char *name, int priority)
     }
   }
 
+  #ifdef USERPROG
+    t->parent_tid = thread_current()->tid;
+    t->is_parent_waiting = false;
+    t->childs_waited = pallog_get_page(0);
+    t->childs_with_exit_codes = pallog_get_page(0);
+  #endif
+
   intr_set_level(old_level);
 }
 
@@ -830,3 +837,19 @@ static tid_t allocate_tid(void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
+
+/* Searches the list of threads and returns a pointer to
+  the thread with the matching tid. If not found, returns NULL 
+*/
+struct thread *get_thread_from_tid(tid_t tid) 
+{
+  struct list_elem* e;
+  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
+    struct thread *t = list_entry(e, struct thread, allelem);
+    if (t->tid == tid){
+      return t;
+    }
+  }
+  return NULL;
+}
+
