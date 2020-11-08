@@ -290,6 +290,13 @@ tid_t thread_create(const char *name, int priority,
   init_thread(t, name, priority);
   tid = t->tid = allocate_tid();
 
+  #ifdef USERPROG
+  t->parent_tid = thread_current()->tid;
+  t->is_parent_waiting = false;
+  t->childs_waited = palloc_get_page(0);
+  t->childs_with_exit_codes = palloc_get_page(0);
+  #endif
+
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -666,6 +673,7 @@ static void init_thread(struct thread *t, const char *name, int priority)
   strlcpy(t->name, name, sizeof t->name);
   t->stack = (uint8_t *)t + PGSIZE;
   t->magic = THREAD_MAGIC;
+  
 
   if (!thread_mlfqs)
   {
@@ -673,6 +681,7 @@ static void init_thread(struct thread *t, const char *name, int priority)
     t->base_priority = priority;
     list_init(&t->blocked_threads);
     t->priority_receiver = NULL;
+    
   }
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
@@ -694,12 +703,6 @@ static void init_thread(struct thread *t, const char *name, int priority)
     }
   }
 
-  #ifdef USERPROG
-    t->parent_tid = thread_current()->tid;
-    t->is_parent_waiting = false;
-    t->childs_waited = pallog_get_page(0);
-    t->childs_with_exit_codes = pallog_get_page(0);
-  #endif
 
   intr_set_level(old_level);
 }
