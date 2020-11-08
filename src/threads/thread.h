@@ -110,7 +110,12 @@ struct thread
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
    uint32_t *pagedir; /* Page directory. */
+   tid_t parent_tid;  /* tid of parent thread*/
+   bool is_parent_waiting;  /*checks if parent is currently waiting on that thread*/
+   int* childs_waited; /*array with childs that our thread has alreaty waited on*/
+   int** childs_with_exit_codes /*stores the exit code of each child after it has been terminated*/   
 #endif
+
 
    /* Owned by thread.c. */
    unsigned magic; /* Detects stack overflow. */
@@ -155,5 +160,6 @@ int thread_get_load_avg(void);
 struct thread *highest_priority_thread(struct list *);
 int highest_blocked_thread_priority(struct list *);
 void thread_set_effective_priority(struct thread *, int);
+struct thread *get_thread_from_tid(tid_t);
 
 #endif /* threads/thread.h */
