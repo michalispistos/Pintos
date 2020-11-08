@@ -278,12 +278,15 @@ void lock_acquire(struct lock *lock)
     to the blocked_threads list of the lock holder, and priority is donated if needed. */
     if (lock->semaphore.value == 0)
     {
+      enum intr_level old_level;
+      old_level = intr_disable();
       thread_current()->priority_receiver = lock->holder;
       list_push_back(&lock->holder->blocked_threads, &thread_current()->blocked_elem);
       if (lock->holder->effective_priority < thread_current()->effective_priority)
       {
         change_priority(lock->holder, thread_current()->effective_priority);
       }
+      intr_set_level(old_level); 
     }
   }
 
