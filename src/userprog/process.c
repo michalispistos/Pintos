@@ -130,12 +130,54 @@ vi Push a fake return address (0)
  * 
  * This function will be implemented in task 2.
  * For now, it does nothing. */
-int process_wait(tid_t child_tid UNUSED)
+int process_wait(tid_t child_tid)
 {
+  /*
   while (1)
   {
   }
   return -1;
+  */
+ 
+  
+  struct thread* child = get_thread_from_tid(child_tid);
+
+  if(!child || child->parent_tid != thread_current()->tid){
+    return -1;
+  }
+
+  //If wait has already been caleed on that thread
+  int i=0;
+  int* childs_waited = thread_current()->childs_waited;
+  while(childs_waited[i]!=NULL){
+    if(childs_waited[i] == child_tid){
+      return -1;
+    }
+    i++;
+  }
+
+  //Added to threads already waited
+  childs_waited[i] = child_tid;
+
+  //If terminated
+  //LOOP THROUGH THE LIST OF PAIRS
+  //RETURN EXIT_CODE
+
+  //TODO:
+  //ADD EXIT CODE IN LIST WHEN EXIT
+  //WHEN EXIT IS CALLED CHECK IF PARENT IS_WAITING-AND IF PARENT IS DEAD
+  //WHEN WE ARE EXITING IF PARENT IS WAITING SEMA_UP(UNLESS PARENT IS DEAD)
+  //ARE THE ARRAYS A GOOD CHOICE(WHEN ARE WE FREEING)?
+  
+
+  // If successful 
+  
+  //Parent waitng
+  child->is_parent_waiting = true;
+  //SEMA DOWN(CHANGE SEMAPHORE INTIALISATION-IN TIMER.C->MOVE IN THREAD.C)
+  //LOOP THROUGH THE LIST OF PAIRS
+  //RETURN EXIT_CODE
+  return 0;
 }
 
 /* Free the current process's resources. */
