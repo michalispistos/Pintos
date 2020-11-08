@@ -47,7 +47,7 @@ tid_t process_execute(const char *file_name)
          ++i;
        }
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(args[1], PRI_DEFAULT, start_process, args);
+  tid = thread_create(args[0], PRI_DEFAULT, start_process, args);
   if (tid == TID_ERROR)
   {
     palloc_free_page(args);
@@ -80,6 +80,7 @@ v Push the number of arguments
 vi Push a fake return address (0)
 */
   /*Creating stack*/
+  /*
   int argc = 0;
   while(file_name[argc]!=NULL){
     argc++;
@@ -99,6 +100,7 @@ vi Push a fake return address (0)
   if_.esp = &argc;
   --if_.esp;
   if_.esp = &"\0";
+  */
   
 
   /* If load failed, quit. */
