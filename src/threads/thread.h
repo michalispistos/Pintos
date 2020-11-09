@@ -109,10 +109,11 @@ struct thread
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
-   uint32_t *pagedir;      /* Page directory. */
-   tid_t parent_tid;       /* tid of parent thread*/
-   bool is_parent_waiting; /* Checks if parent is currently waiting on that thread*/
-   struct list children;   /* List of child threads (that may be dead) */
+   uint32_t *pagedir;                     /* Page directory. */
+   tid_t parent_tid;                      /* tid of parent thread*/
+   bool is_parent_waiting;                /* Checks if parent is currently waiting on that thread*/
+   struct list children;                  /* List of child threads (that may be dead) */
+   struct child_thread_info *thread_info; /* Pointer to info struct about this child thread. */
 #endif
 
    /* Owned by thread.c. */
