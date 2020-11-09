@@ -94,7 +94,7 @@ struct thread
    struct semaphore sema;       /* A semaphore  that blocks that thread. */
 
    /* Shared between thread.c and synch.c. */
-   struct list_elem elem;       /* List element. */
+   struct list_elem elem; /* List element. */
 
    /* Values for priority scheduler */
    int base_priority;                /* Base priority only used for priority donation. */
@@ -109,13 +109,11 @@ struct thread
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
-   uint32_t *pagedir; /* Page directory. */
-   tid_t parent_tid;  /* tid of parent thread*/
-   bool is_parent_waiting;  /*checks if parent is currently waiting on that thread*/
-   int* childs_waited; /*array with childs that our thread has alreaty waited on*/
-   int** childs_with_exit_codes /*stores the exit code of each child after it has been terminated*/   
+   uint32_t *pagedir;                 /* Page directory. */
+   tid_t parent_tid;                  /* tid of parent thread*/
+   bool is_parent_waiting;            /* Checks if parent is currently waiting on that thread*/
+   struct list parent_waited_history; /* List of child threads that our thread has already waited on */
 #endif
-
 
    /* Owned by thread.c. */
    unsigned magic; /* Detects stack overflow. */
