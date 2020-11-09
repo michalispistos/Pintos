@@ -91,7 +91,7 @@ struct thread
    struct list_elem allelem;    /* List element for all threads list. */
    int time_to_wake_up;         /* The time when the thread must wake up if it's asleep */
    struct list_elem sleep_elem; /* List element for sleep_list. */
-   struct semaphore sema;       /* A semaphore  that blocks that thread. */
+   struct semaphore sema;       /* A semaphore that blocks that thread. */
 
    /* Shared between thread.c and synch.c. */
    struct list_elem elem; /* List element. */
@@ -109,10 +109,10 @@ struct thread
 
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
-   uint32_t *pagedir;                 /* Page directory. */
-   tid_t parent_tid;                  /* tid of parent thread*/
-   bool is_parent_waiting;            /* Checks if parent is currently waiting on that thread*/
-   struct list parent_waited_history; /* List of child threads that our thread has already waited on */
+   uint32_t *pagedir;      /* Page directory. */
+   tid_t parent_tid;       /* tid of parent thread*/
+   bool is_parent_waiting; /* Checks if parent is currently waiting on that thread*/
+   struct list children;   /* List of child threads (that may be dead) */
 #endif
 
    /* Owned by thread.c. */
