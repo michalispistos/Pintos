@@ -40,18 +40,33 @@ tid_t process_execute(const char *file_name)
   char *token, *save_ptr;
   char **args = palloc_get_page(0);
   int i = 0;
-  for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
-       token = strtok_r (NULL, " ", &save_ptr))
-       {         
-         args[i] = token;
-         ++i;
-       }
+  for (token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r(NULL, " ", &save_ptr))
+  {
+    args[i] = token;
+    ++i;
+  }
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(args[0], PRI_DEFAULT, start_process, args);
   if (tid == TID_ERROR)
   {
     palloc_free_page(args);
   }
+
+  /* Creating a child_thread_info struct for the child */
+  struct child_thread_info *info = palloc_get_page(PAL_ZERO);
+  if (info == NULL)
+  {
+    return TID_ERROR;
+  }
+  info->tid = tid;
+  info->has_been_waited_on = false;
+  info->has_died = false;
+
+  struct thread *child = get_thread_from_tid(tid);
+  struct thread *parent = get_thread_from_tid(child->parent_tid);
+  list_push_front(&parent->children, &info->child_elem);
+
   return tid;
 }
 
@@ -71,7 +86,7 @@ start_process(void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load(file_name[0], &if_.eip, &if_.esp);
 
-/*
+  /*
 i Push the arguments onto the stack, one by one, in reverse order
 ii Push a null pointer sentinel (0)
 iii Push pointers to the arguments (again in reverse)
@@ -101,7 +116,6 @@ vi Push a fake return address (0)
   --if_.esp;
   if_.esp = &"\0";
   */
-  
 
   /* If load failed, quit. */
   palloc_free_page(file_name);
@@ -132,25 +146,27 @@ vi Push a fake return address (0)
  * For now, it does nothing. */
 int process_wait(tid_t child_tid)
 {
-  /*
+
   while (1)
   {
   }
   return -1;
-  */
- 
-  
-  struct thread* child = get_thread_from_tid(child_tid);
 
-  if(!child || child->parent_tid != thread_current()->tid){
+  /*
+  struct thread *child = get_thread_from_tid(child_tid);
+
+  if (!child || child->parent_tid != thread_current()->tid)
+  {
     return -1;
   }
 
   //If wait has already been caleed on that thread
-  int i=0;
-  int* childs_waited = thread_current()->childs_waited;
-  while(childs_waited[i]!=NULL){
-    if(childs_waited[i] == child_tid){
+  int i = 0;
+  int *childs_waited = thread_current()->childs_waited;
+  while (childs_waited[i] != NULL)
+  {
+    if (childs_waited[i] == child_tid)
+    {
       return -1;
     }
     i++;
@@ -168,15 +184,15 @@ int process_wait(tid_t child_tid)
   //WHEN EXIT IS CALLED CHECK IF PARENT IS_WAITING-AND IF PARENT IS DEAD
   //WHEN WE ARE EXITING IF PARENT IS WAITING SEMA_UP(UNLESS PARENT IS DEAD)
   //ARE THE ARRAYS A GOOD CHOICE(WHEN ARE WE FREEING)?
-  
 
-  // If successful 
-  
+  // If successful
+
   //Parent waitng
   child->is_parent_waiting = true;
   //SEMA DOWN(CHANGE SEMAPHORE INTIALISATION-IN TIMER.C->MOVE IN THREAD.C)
   //LOOP THROUGH THE LIST OF PAIRS
   //RETURN EXIT_CODE
+  */
   return 0;
 }
 
@@ -200,6 +216,14 @@ void process_exit(void)
          that's been freed (and cleared). */
     cur->pagedir = NULL;
     pagedir_activate(NULL);
+
+    /* Freeing children list*/
+    struct list_elem *e;
+    for (e = list_begin(&cur->children); e != list_end(&cur->children); e = list_next(e))
+    {
+      palloc_free_page(list_entry(e, struct child_thread_info, child_elem));
+    }
+
     pagedir_destroy(pd);
   }
 }
