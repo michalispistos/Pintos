@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
 #include <inttypes.h>
 #include "lib/stdio.h"
 
@@ -27,6 +28,8 @@ static void
 exit(int status)
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);
+  thread_current()->thread_info->exited_normally = true;
+  thread_current()->thread_info->exit_code = status;
   thread_exit();
 }
 
