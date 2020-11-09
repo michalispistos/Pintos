@@ -61,11 +61,12 @@ tid_t process_execute(const char *file_name)
   }
   info->tid = tid;
   info->has_been_waited_on = false;
-  info->has_died = false;
+  info->exited_normally = false;
 
   struct thread *child = get_thread_from_tid(tid);
   struct thread *parent = get_thread_from_tid(child->parent_tid);
   list_push_front(&parent->children, &info->child_elem);
+  child->thread_info = info;
 
   return tid;
 }
@@ -147,53 +148,56 @@ vi Push a fake return address (0)
 int process_wait(tid_t child_tid)
 {
 
-  while (1)
+  struct list_elem *e;
+  bool child_found = false;
+  struct child_thread_info *info;
+
+  /* Finds the struct child info corresponding to the child_tid */
+  for (e = list_begin(&thread_current()->children); e != list_end(&thread_current()->children); e = list_next(e))
   {
+    info = list_entry(e, struct child_thread_info, child_elem);
+
+    /* This is the case where the given tid belongs to a child thread. */
+    if (info->tid == child_tid)
+    {
+      child_found = true;
+      if (info->has_been_waited_on)
+      {
+        return -1;
+      }
+      break;
+    }
   }
-  return -1;
 
-  /*
-  struct thread *child = get_thread_from_tid(child_tid);
-
-  if (!child || child->parent_tid != thread_current()->tid)
+  /* This is the case where the tid is invalid or not a child thread. */
+  if (!child_found)
   {
     return -1;
   }
 
-  //If wait has already been caleed on that thread
-  int i = 0;
-  int *childs_waited = thread_current()->childs_waited;
-  while (childs_waited[i] != NULL)
+  info->has_been_waited_on = true;
+
+  struct thread *child = get_thread_from_tid(child_tid);
+  /* It is a child that has been terminated. */
+  if (child == NULL)
   {
-    if (childs_waited[i] == child_tid)
+    if (info->exited_normally)
     {
-      return -1;
+      return info->exit_code;
     }
-    i++;
+    return -1;
   }
 
-  //Added to threads already waited
-  childs_waited[i] = child_tid;
-
-  //If terminated
-  //LOOP THROUGH THE LIST OF PAIRS
-  //RETURN EXIT_CODE
-
-  //TODO:
-  //ADD EXIT CODE IN LIST WHEN EXIT
-  //WHEN EXIT IS CALLED CHECK IF PARENT IS_WAITING-AND IF PARENT IS DEAD
-  //WHEN WE ARE EXITING IF PARENT IS WAITING SEMA_UP(UNLESS PARENT IS DEAD)
-  //ARE THE ARRAYS A GOOD CHOICE(WHEN ARE WE FREEING)?
-
-  // If successful
-
-  //Parent waitng
+  //Successful
+  //Will be up-ed by waiting child
   child->is_parent_waiting = true;
-  //SEMA DOWN(CHANGE SEMAPHORE INTIALISATION-IN TIMER.C->MOVE IN THREAD.C)
-  //LOOP THROUGH THE LIST OF PAIRS
-  //RETURN EXIT_CODE
-  */
-  return 0;
+  sema_down(&thread_current()->sema);
+
+  if (info->exited_normally)
+  {
+    return info->exit_code;
+  }
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -216,6 +220,15 @@ void process_exit(void)
          that's been freed (and cleared). */
     cur->pagedir = NULL;
     pagedir_activate(NULL);
+
+    if (cur->is_parent_waiting)
+    {
+      struct thread *parent = get_thread_from_tid(cur->parent_tid);
+      if (parent)
+      {
+        sema_up(&parent->sema);
+      }
+    }
 
     /* Freeing children list*/
     struct list_elem *e;
