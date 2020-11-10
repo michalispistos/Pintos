@@ -112,8 +112,8 @@ struct thread
    uint32_t *pagedir;                     /* Page directory. */
    tid_t parent_tid;                      /* tid of parent thread*/
    bool is_parent_waiting;                /* Checks if parent is currently waiting on that thread*/
-   struct list children;                  /* List of child threads (that may be dead) */
-   struct child_thread_info *thread_info; /* Pointer to info struct about this child thread. */
+   struct list children_info;             /* List of struct thread_info for its children (that may be dead). */
+   struct thread_info *thread_info;       /* Pointer to info struct about this thread. */
 #endif
 
    /* Owned by thread.c. */

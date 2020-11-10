@@ -54,7 +54,7 @@ tid_t process_execute(const char *file_name)
   }
 
   /* Creating a child_thread_info struct for the child */
-  struct child_thread_info *info = palloc_get_page(PAL_ZERO);
+  struct thread_info *info = palloc_get_page(PAL_ZERO);
   if (info == NULL)
   {
     return TID_ERROR;
@@ -65,8 +65,9 @@ tid_t process_execute(const char *file_name)
 
   struct thread *child = get_thread_from_tid(tid);
   struct thread *parent = get_thread_from_tid(child->parent_tid);
-  list_push_front(&parent->children, &info->child_elem);
+  list_push_front(&parent->children_info, &info->child_elem);
   child->thread_info = info;
+  info->self = child;
 
   return tid;
 }
@@ -147,15 +148,15 @@ vi Push a fake return address (0)
  * For now, it does nothing. */
 int process_wait(tid_t child_tid)
 {
-
-  struct list_elem *e;
+  
   bool child_found = false;
-  struct child_thread_info *info;
+  struct thread_info *info;
+  struct list_elem *e;
 
   /* Finds the struct child info corresponding to the child_tid */
-  for (e = list_begin(&thread_current()->children); e != list_end(&thread_current()->children); e = list_next(e))
+  for (e = list_begin(&thread_current()->children_info); e != list_end(&thread_current()->children_info); e = list_next(e))
   {
-    info = list_entry(e, struct child_thread_info, child_elem);
+    info = list_entry(e, struct thread_info, child_elem);
 
     /* This is the case where the given tid belongs to a child thread. */
     if (info->tid == child_tid)
@@ -175,11 +176,9 @@ int process_wait(tid_t child_tid)
     return -1;
   }
 
-  info->has_been_waited_on = true;
-
-  struct thread *child = get_thread_from_tid(child_tid);
+  
   /* It is a child that has been terminated. */
-  if (child == NULL)
+  if (info->self == NULL)
   {
     if (info->exited_normally)
     {
@@ -187,10 +186,10 @@ int process_wait(tid_t child_tid)
     }
     return -1;
   }
-
+  
   //Successful
   //Will be up-ed by waiting child
-  child->is_parent_waiting = true;
+  info->self->is_parent_waiting = true;
   sema_down(&thread_current()->sema);
 
   if (info->exited_normally)
@@ -232,9 +231,9 @@ void process_exit(void)
 
     /* Freeing children list*/
     struct list_elem *e;
-    for (e = list_begin(&cur->children); e != list_end(&cur->children); e = list_next(e))
+    for (e = list_begin(&cur->children_info); e != list_end(&cur->children_info); e = list_next(e))
     {
-      palloc_free_page(list_entry(e, struct child_thread_info, child_elem));
+      palloc_free_page(list_entry(e, struct thread_info, child_elem));
     }
 
     pagedir_destroy(pd);

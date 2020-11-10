@@ -81,7 +81,7 @@ verify_memory_address(struct thread *t, void *user_pointer)
   if (!user_pointer || !is_user_vaddr(user_pointer) || pagedir_get_page(t->pagedir, user_pointer) == NULL)
   {
     /* TODO: Need to call exit() after implementing it. */
-    pagedir_destroy(t->pagedir);
+    //pagedir_destroy(t->pagedir);
     thread_exit();
     return false;
   }
