@@ -18,6 +18,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+//static struct lock process_lock;
+
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
@@ -65,7 +67,9 @@ tid_t process_execute(const char *file_name)
 
   struct thread *child = get_thread_from_tid(tid);
   struct thread *parent = get_thread_from_tid(child->parent_tid);
+  //ACQUIRE A LOCK
   list_push_front(&parent->children_info, &info->child_elem);
+  //RELEASE A LOCK
   child->thread_info = info;
   info->self = child;
 
@@ -222,11 +226,14 @@ void process_exit(void)
 
     if (cur->is_parent_waiting)
     {
+      //ACQUIRE LOCK
+      //RELEASE LOCK
       struct thread *parent = get_thread_from_tid(cur->parent_tid);
       if (parent)
       {
         sema_up(&parent->sema);
       }
+
     }
 
     /* Freeing children list*/
