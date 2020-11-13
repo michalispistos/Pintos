@@ -129,6 +129,7 @@ void thread_init(void)
 
 #ifdef USERPROG
   list_init(&initial_thread->children_info);
+  list_init(&initial_thread->open_files);
 #endif
 }
 
@@ -299,6 +300,7 @@ tid_t thread_create(const char *name, int priority,
   t->parent_tid = thread_current()->tid;
   t->is_parent_waiting = false;
   list_init(&t->children_info);
+  list_init(&t->open_files);
 #endif
 
   /* Prepare thread for first run by initializing its stack.
