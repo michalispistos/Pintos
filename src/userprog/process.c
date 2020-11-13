@@ -17,9 +17,9 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
 
 //static struct lock process_lock;
-
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
@@ -252,6 +252,8 @@ void process_exit(void)
 
     lock_acquire(&cur->thread_info->lock);
     lock_release(&cur->thread_info->lock);
+    file_close(cur->executable);
+
     if (cur->is_parent_waiting)
     {
       struct thread *parent = get_thread_from_tid(cur->parent_tid);
@@ -261,10 +263,15 @@ void process_exit(void)
       }
 
     }
+    /* Freeing open_files list*/
+    for (struct list_elem *e = list_begin(&cur->open_files); e != list_end(&cur->open_files); e = list_next(e))
+    {
+      palloc_free_page(list_entry(e, struct open_file, fd_elem));
+    }
+
 
     /* Freeing children list*/
-    struct list_elem *e;
-    for (e = list_begin(&cur->children_info); e != list_end(&cur->children_info); e = list_next(e))
+    for (struct list_elem *e = list_begin(&cur->children_info); e != list_end(&cur->children_info); e = list_next(e))
     {
       palloc_free_page(list_entry(e, struct thread_info, child_elem));
     }
@@ -460,7 +467,8 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+  file_deny_write(file);
+  t->executable = file;
   return success;
 }
 
