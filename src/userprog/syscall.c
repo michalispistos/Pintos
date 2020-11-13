@@ -251,6 +251,7 @@ static void close(int fd)
     of = list_entry(e, struct open_file, fd_elem);
     if (of->fd == fd)
     {
+      file_deny_write(of->file);
       file_close(of->file);
       break;
     }
