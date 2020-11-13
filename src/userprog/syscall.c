@@ -196,7 +196,23 @@ static void seek(int fd, unsigned position)
   lock_release(&file_lock);
 }
 
-// static unsigned tell(int fd) {}
+static unsigned tell(int fd)
+{
+  lock_acquire(&file_lock);
+  struct list_elem *e;
+  struct open_file *of;
+  for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
+  {
+    of = list_entry(e, struct open_file, fd_elem);
+    if (of->fd == fd)
+    {
+      lock_release(&file_lock);
+      return file_tell(of->file);
+    }
+  }
+  lock_release(&file_lock);
+  return -1;
+}
 
 // static void close(int fd) {}
 
