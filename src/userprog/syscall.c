@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include "lib/stdio.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
 #include "threads/palloc.h"
 
 typedef int pid_t;
@@ -119,7 +120,7 @@ static int read(int fd, void *buffer, unsigned size)
 {
   lock_acquire(&file_lock);
   // todo
-  // if (fd == 0)
+  // if (fd == STDIN_FILENO)
   // {
   //   return input_getc();
   // }
@@ -133,6 +134,7 @@ static int read(int fd, void *buffer, unsigned size)
     if (of->fd == fd)
     {
       lock_release(&file_lock);
+      // Does not advance position after reading
       return file_read_at(of->file, buffer, size, 0);
     }
   }
@@ -140,16 +142,13 @@ static int read(int fd, void *buffer, unsigned size)
   return -1;
 }
 
-/* Writes size bytes from buffer to the open file fd.
-  Currently it can only write to console
-TODO: implement full 
-*/
+/* Writes size bytes from buffer to the open file fd. */
 static int
 write(int fd, const void *buffer, unsigned size)
 {
-  int tracker = 0;
   if (fd == STDOUT_FILENO)
   {
+    int tracker = 0;
     while (size > MAX_SINGLE_BUFFER_SIZE)
     {
       putbuf(buffer + tracker, MAX_SINGLE_BUFFER_SIZE);
@@ -157,8 +156,25 @@ write(int fd, const void *buffer, unsigned size)
       size -= MAX_SINGLE_BUFFER_SIZE;
     }
     putbuf(buffer + tracker, size);
+    return size;
   }
-  return size;
+
+  lock_acquire(&file_lock);
+  struct list_elem *e;
+  struct open_file *of;
+  for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
+  {
+    of = list_entry(e, struct open_file, fd_elem);
+    if (of->fd == fd)
+    {
+      lock_release(&file_lock);
+      // Advances position after writing
+      // Make sure can't write to program file
+      return file_write(of->file, buffer, size);
+    }
+  }
+  lock_release(&file_lock);
+  return 0;
 }
 
 // static void seek(int fd, unsigned position) {}
