@@ -100,6 +100,7 @@ static int filesize(int fd)
   struct list_elem *e;
   struct open_file *of;
   lock_acquire(&file_lock);
+  // Create helper function for this
   for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
   {
     of = list_entry(e, struct open_file, fd_elem);
@@ -114,7 +115,30 @@ static int filesize(int fd)
   return -1;
 }
 
-// static int read(int fd, void *buffer, unsigned size) {}
+static int read(int fd, void *buffer, unsigned size)
+{
+  lock_acquire(&file_lock);
+  // todo
+  // if (fd == 0)
+  // {
+  //   return input_getc();
+  // }
+
+  struct list_elem *e;
+  struct open_file *of;
+  // Implement helper function
+  for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
+  {
+    of = list_entry(e, struct open_file, fd_elem);
+    if (of->fd == fd)
+    {
+      lock_release(&file_lock);
+      return file_read_at(of->file, buffer, size, 0);
+    }
+  }
+  lock_release(&file_lock);
+  return -1;
+}
 
 /* Writes size bytes from buffer to the open file fd.
   Currently it can only write to console
