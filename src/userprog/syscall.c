@@ -96,16 +96,21 @@ static int open(const char *file)
 
 static int filesize(int fd)
 {
+
   struct list_elem *e;
   struct open_file *of;
+  lock_acquire(&file_lock);
   for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
   {
     of = list_entry(e, struct open_file, fd_elem);
     if (of->fd == fd)
     {
+      lock_release(&file_lock);
       return file_length(of->file);
     }
   }
+  // Not found
+  lock_release(&file_lock);
   return -1;
 }
 
