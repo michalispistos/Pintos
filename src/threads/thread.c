@@ -112,7 +112,7 @@ void thread_init(void)
   init_thread(initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid();
-  sema_init(&initial_thread->sema, 1);
+  sema_init(&initial_thread->sema, 0);
 
   /* The priority queues, load_avg and number_of_threads_in_queue_array 
      are initialised. */
@@ -677,7 +677,7 @@ static void init_thread(struct thread *t, const char *name, int priority)
   strlcpy(t->name, name, sizeof t->name);
   t->stack = (uint8_t *)t + PGSIZE;
   t->magic = THREAD_MAGIC;
-  sema_init(&t->sema, 1);
+  sema_init(&t->sema, 0);
 
   if (!thread_mlfqs)
   {

@@ -56,22 +56,23 @@ tid_t process_execute(const char *file_name)
   }
 
   /* Creating a child_thread_info struct for the child */
-  struct thread_info *info = palloc_get_page(PAL_ZERO);
-  if (info == NULL)
+  struct thread_info *child_info = palloc_get_page(PAL_ZERO);
+  if (child_info == NULL)
   {
     return TID_ERROR;
   }
-  info->tid = tid;
-  info->has_been_waited_on = false;
-  info->exited_normally = false;
+  child_info->tid = tid;
+  child_info->has_been_waited_on = false;
+  child_info->exited_normally = false;
+  lock_init(&child_info->lock);
 
   struct thread *child = get_thread_from_tid(tid);
   struct thread *parent = get_thread_from_tid(child->parent_tid);
-  //ACQUIRE A LOCK
-  list_push_front(&parent->children_info, &info->child_elem);
-  //RELEASE A LOCK
-  child->thread_info = info;
-  info->self = child;
+  lock_acquire(&child_info->lock);
+  list_push_front(&parent->children_info, &child_info->child_elem);
+  lock_release(&child_info->lock);
+  child->thread_info = child_info;
+  child_info->self = child;
 
   return tid;
 }
@@ -154,19 +155,19 @@ int process_wait(tid_t child_tid)
 {
   
   bool child_found = false;
-  struct thread_info *info;
+  struct thread_info *child_info;
   struct list_elem *e;
 
   /* Finds the struct child info corresponding to the child_tid */
   for (e = list_begin(&thread_current()->children_info); e != list_end(&thread_current()->children_info); e = list_next(e))
   {
-    info = list_entry(e, struct thread_info, child_elem);
+    child_info = list_entry(e, struct thread_info, child_elem);
 
     /* This is the case where the given tid belongs to a child thread. */
-    if (info->tid == child_tid)
+    if (child_info->tid == child_tid)
     {
       child_found = true;
-      if (info->has_been_waited_on)
+      if (child_info->has_been_waited_on)
       {
         return -1;
       }
@@ -180,25 +181,30 @@ int process_wait(tid_t child_tid)
     return -1;
   }
 
+  child_info->has_been_waited_on = true;
   
   /* It is a child that has been terminated. */
-  if (info->self == NULL)
+  lock_acquire(&child_info->lock);
+  if (child_info->self == NULL)
   {
-    if (info->exited_normally)
+    if (child_info->exited_normally)
     {
-      return info->exit_code;
+     // lock_release(&child_info->lock);
+      return child_info->exit_code;
     }
+    lock_release(&child_info->lock);
     return -1;
   }
   
   //Successful
   //Will be up-ed by waiting child
-  info->self->is_parent_waiting = true;
+  child_info->self->is_parent_waiting = true;
+  lock_release(&child_info->lock);
   sema_down(&thread_current()->sema);
-
-  if (info->exited_normally)
+  
+  if (child_info->exited_normally)
   {
-    return info->exit_code;
+    return child_info->exit_code;
   }
   return -1;
 }
@@ -224,10 +230,10 @@ void process_exit(void)
     cur->pagedir = NULL;
     pagedir_activate(NULL);
 
+    lock_acquire(&cur->thread_info->lock);
+    lock_release(&cur->thread_info->lock);
     if (cur->is_parent_waiting)
     {
-      //ACQUIRE LOCK
-      //RELEASE LOCK
       struct thread *parent = get_thread_from_tid(cur->parent_tid);
       if (parent)
       {
