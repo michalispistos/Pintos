@@ -8,14 +8,19 @@
 #include "userprog/process.h"
 #include <inttypes.h>
 #include "lib/stdio.h"
+#include "filesys/filesys.h"
+#include "threads/palloc.h"
 
 typedef int pid_t;
 
 /* The maximum size for a single buffer to be written to the console. */
 #define MAX_SINGLE_BUFFER_SIZE (200)
 
-/* Lock needed to use the fulesystem. */
+/* Lock needed to use the filesystem. */
 static struct lock file_lock;
+
+/* File descriptor for open. */
+static int fd = 2;
 
 static void syscall_handler(struct intr_frame *);
 
@@ -66,11 +71,33 @@ static bool remove(const char *file)
   return result;
 }
 
-//static int open(const char *file)
-//{
-//}
+static int open(const char *file)
+{
+  lock_acquire(&file_lock);
+  struct file *file_to_open = filesys_open(file);
+  if (file_to_open == NULL)
+  {
+    return -1;
+  }
 
-// static int filesize(int fd) {}
+  struct open_file *of = palloc_get_page(PAL_ZERO);
+  if (of == NULL)
+  {
+    return TID_ERROR;
+  }
+
+  of->fd = fd++;
+  of->file = file_to_open;
+  list_push_front(thread_current()->open_files, &of->fd_elem);
+
+  lock_release(&file_lock);
+  return of->fd;
+}
+
+/*static int filesize(int fd)
+{
+
+}*/
 
 // static int read(int fd, void *buffer, unsigned size) {}
 
