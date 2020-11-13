@@ -189,7 +189,7 @@ int process_wait(tid_t child_tid)
   {
     if (child_info->exited_normally)
     {
-     // lock_release(&child_info->lock);
+      lock_release(&child_info->lock);
       return child_info->exit_code;
     }
     lock_release(&child_info->lock);
