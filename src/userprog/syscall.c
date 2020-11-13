@@ -33,9 +33,12 @@ exit(int status)
   thread_exit();
 }
 
-// static pid_t exec(const char *cmd_line) {}
+//static pid_t exec(const char *cmd_line) {}
 
-// static int wait(pid_t pid) {}
+static int wait(pid_t pid)
+{
+  process_wait(pid);
+}
 
 // static bool create(const char *file, unsigned initial_size) {}
 
