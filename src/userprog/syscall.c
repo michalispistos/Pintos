@@ -58,9 +58,17 @@ static bool create(const char *file, unsigned initial_size)
   return result;
 }
 
-// static bool remove(const char *file) {}
+static bool remove(const char *file)
+{
+  lock_acquire(&file_lock);
+  bool result = filesys_remove(file);
+  lock_release(&file_lock);
+  return result;
+}
 
-// static int open(const char *file) {}
+//static int open(const char *file)
+//{
+//}
 
 // static int filesize(int fd) {}
 
