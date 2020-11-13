@@ -177,7 +177,24 @@ write(int fd, const void *buffer, unsigned size)
   return 0;
 }
 
-// static void seek(int fd, unsigned position) {}
+static void seek(int fd, unsigned position)
+{
+  lock_acquire(&file_lock);
+  struct list_elem *e;
+  struct open_file *of;
+  // Implement helper function
+  for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
+  {
+    of = list_entry(e, struct open_file, fd_elem);
+    if (of->fd == fd)
+    {
+      lock_release(&file_lock);
+      file_seek(of->file, position);
+      return;
+    }
+  }
+  lock_release(&file_lock);
+}
 
 // static unsigned tell(int fd) {}
 
