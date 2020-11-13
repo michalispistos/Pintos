@@ -21,7 +21,10 @@ void syscall_init(void)
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-// static void halt(void) {}
+static void halt(void)
+{
+  shutdown_power_off();
+}
 
 /* Terminates the current user program */
 static void
