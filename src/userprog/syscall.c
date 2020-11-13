@@ -14,6 +14,9 @@ typedef int pid_t;
 /* The maximum size for a single buffer to be written to the console. */
 #define MAX_SINGLE_BUFFER_SIZE (200)
 
+/* Lock needed to use the fulesystem. */
+static struct lock file_lock;
+
 static void syscall_handler(struct intr_frame *);
 
 void syscall_init(void)
@@ -36,14 +39,24 @@ exit(int status)
   thread_exit();
 }
 
-//static pid_t exec(const char *cmd_line) {}
+// TODO: Check this is correct
+static pid_t exec(const char *cmd_line)
+{
+  return process_execute(cmd_line);
+}
 
 static int wait(pid_t pid)
 {
   process_wait(pid);
 }
 
-// static bool create(const char *file, unsigned initial_size) {}
+static bool create(const char *file, unsigned initial_size)
+{
+  lock_acquire(&file_lock);
+  bool result = filesys_create(file, initial_size);
+  lock_release(&file_lock);
+  return result;
+}
 
 // static bool remove(const char *file) {}
 
