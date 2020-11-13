@@ -101,28 +101,48 @@ iv Push a pointer to the first pointer
 v Push the number of arguments
 vi Push a fake return address (0)
 */
-  /*Creating stack*/
-  /*
+  /*Seting up the stack*/
   int argc = 0;
   while(file_name[argc]!=NULL){
     argc++;
   }
+  if_.esp=if_.esp-4;
+
   for(int i=argc-1;i>=0;--i){
-    if_.esp = &file_name[i];
-    --if_.esp;
+    *(char**)if_.esp = file_name[i];
+    printf("%s(%p)\n",*(char**)(if_.esp),if_.esp);
+    if_.esp=if_.esp-4;
   }
-  if_.esp = &"\0";
+  *(char**)if_.esp = "\0";
+  printf("%s\n",*(char**)if_.esp);
+  if_.esp=if_.esp-1;
+  //if_.eip;
   for(int i=argc-1;i>=0;--i){
-    * (char***)if_.esp = &file_name[i];
-    --if_.esp;
+    * (char***)if_.esp = if_.esp+(argc-i)+(i+1)*4;
+    printf("%p(%p)\n",*(char***)(if_.esp),if_.esp);
+    if_.esp=if_.esp-1;
   }
-  char** address_args_0 = &file_name[0]; 
-  * (char****) if_.esp  = &address_args_0;
-  --if_.esp;
-  if_.esp = &argc;
-  --if_.esp;
-  if_.esp = &"\0";
-  */
+  * (char****) if_.esp  = if_.esp + 1;
+  printf("%p\n",*(char****)(if_.esp));
+  if_.esp=if_.esp-4;
+ 
+  *(int*)if_.esp = argc;
+   printf("%d\n",*(int*)(if_.esp));
+   if_.esp=if_.esp-4;
+  *(int*)if_.esp =0;
+   printf("%d\n",*(int*)(if_.esp));
+  //printf("\n");
+  //printf("Stack start:\n");
+ 
+  //printf("%d\n",*(int*)(if_.esp+4));
+  //printf("%p\n",*(char****)(if_.esp+8));
+  //printf("%p\n",*(char***)(if_.esp+9));
+  //printf("%s\n",*(char**)(if_.esp+10));
+  //printf("%s\n",*(char**)(if_.esp+14));
+  //printf("StartEnd\n");
+  printf("%d \n",PHYS_BASE-if_.esp);
+  
+   hex_dump(0,if_.esp,PHYS_BASE-if_.esp,1);
 
   /* If load failed, quit. */
   palloc_free_page(file_name);
@@ -576,7 +596,7 @@ setup_stack(void **esp)
     success = install_page(((uint8_t *)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
       //CHANGED
-      *esp = PHYS_BASE - 12;
+      *esp = PHYS_BASE;
     //
     else
       palloc_free_page(kpage);
