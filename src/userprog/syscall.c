@@ -94,10 +94,20 @@ static int open(const char *file)
   return of->fd;
 }
 
-/*static int filesize(int fd)
+static int filesize(int fd)
 {
-
-}*/
+  struct list_elem *e;
+  struct open_file *of;
+  for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
+  {
+    of = list_entry(e, struct open_file, fd_elem);
+    if (of->fd == fd)
+    {
+      return file_length(of->file);
+    }
+  }
+  return -1;
+}
 
 // static int read(int fd, void *buffer, unsigned size) {}
 
