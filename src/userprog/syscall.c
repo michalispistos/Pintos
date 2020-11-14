@@ -178,6 +178,9 @@ static int
 write(int fd, const void *buffer, unsigned size)
 {
   lock_acquire(&file_lock);
+
+  // Fd 1 writes to the console
+  //printf("REACHED WRITE\n");
   if (fd == STDOUT_FILENO)
   {
     int tracker = 0;
@@ -268,13 +271,36 @@ static void close(int fd)
 static bool
 verify_memory_address(struct thread *t, void *user_pointer)
 {
+  //printf("verifying!\n");
+
   if (!user_pointer || !is_user_vaddr(user_pointer) || pagedir_get_page(t->pagedir, user_pointer) == NULL)
   {
-    /* TODO: Need to call exit() after implementing it. */
+    //printf("INVALID ADDRESS verify failed\n");
     //pagedir_destroy(t->pagedir);
-    thread_exit();
+    exit(-1);
     return false;
   }
+
+  //printf("POINTER: %p\n", user_pointer);
+  /*
+  if (user_pointer == NULL)
+  {
+    exit(-1);
+    return false;
+  }
+  if (!is_user_vaddr(user_pointer))
+  {
+    exit(-1);
+    return false;
+  }
+  if (pagedir_get_page(t->pagedir, user_pointer) == NULL)
+  {
+    exit(-1);
+    return false;
+  }
+  */
+
+  //printf("verify successful\n");
   return true;
 }
 
@@ -285,63 +311,106 @@ TODO: Implement fully
 static void
 syscall_handler(struct intr_frame *f)
 {
+  verify_memory_address(thread_current(), f->esp);
   int syscall_num = *(int *)(f->esp);
+
+  if (syscall_num == 1)
+  {
+    //printf("EXIT CODE = %d\n", *(int *)(f->esp + 4));
+  }
+
+  /*
+  printf("Syscall num: %d(%p)\n", syscall_num, f->esp);
   void **argv = palloc_get_page(0);
   int i = 0;
   int counter = 4;
   while (*(void **)(f->esp + counter) != NULL)
   {
+    //memcpy(argv[i], f->esp + counter, 4);
     argv[i] = *(void **)(f->esp + counter);
     i++;
     counter += 4;
   }
+  */
+
+  //printf("Syscall argv[0]: %d\n", argv[0]);
+  //printf("argv[1]: %s\n", (void *)argv[1]);
+  // printf("argv[2]: %d", argv[2]);
   switch (syscall_num)
   {
   case SYS_HALT:
     halt();
     break;
   case SYS_EXIT:
-    exit((int)argv[0]);
+    //exit((int)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    exit(*(int *)(f->esp + 4));
     break;
   case SYS_EXEC:
-    verify_memory_address(thread_current(), argv[0]);
-    f->eax = exec((const char *)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    //f->eax = exec((const char *)argv[0]);
+    f->eax = exec(*(const char **)(f->esp + 4));
     break;
   case SYS_WAIT:
-    f->eax = wait((int)argv[0]);
+    //f->eax = wait((int)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    f->eax = wait(*(int *)(f->esp + 4));
     break;
   case SYS_CREATE:
-    verify_memory_address(thread_current(), argv[0]);
-    f->eax = create((const char *)argv[0], (unsigned int)argv[1]);
+    //verify_memory_address(thread_current(), argv[0]);
+    //f->eax = create((const char *)argv[0], (unsigned int)argv[1]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    verify_memory_address(thread_current(), f->esp + 8);
+    f->eax = create(*(const char **)(f->esp + 4), *(unsigned int *)(f->esp + 8));
     break;
   case SYS_REMOVE:
-    verify_memory_address(thread_current(), argv[0]);
-    f->eax = remove((const char *)argv[0]);
+    //verify_memory_address(thread_current(), argv[0]);
+    //f->eax = remove((const char *)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    f->eax = remove(*(const char **)(f->esp + 4));
     break;
   case SYS_OPEN:
-    verify_memory_address(thread_current(), argv[0]);
-    f->eax = open((const char *)argv[0]);
+    //verify_memory_address(thread_current(), argv[0]);
+    //f->eax = open((const char *)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    f->eax = open(*(const char **)(f->esp + 4));
     break;
   case SYS_FILESIZE:
-    f->eax = filesize((int)argv[0]);
+    //f->eax = filesize((int)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    f->eax = filesize(*(int *)(f->esp + 4));
     break;
   case SYS_READ:
-    verify_memory_address(thread_current(), argv[1]);
-    f->eax = read((int)argv[0], (void *)argv[1], (unsigned int)argv[2]);
+    //verify_memory_address(thread_current(), argv[1]);
+    //f->eax = read((int)argv[0], (void *)argv[1], (unsigned int)argv[2]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    verify_memory_address(thread_current(), f->esp + 8);
+    verify_memory_address(thread_current(), f->esp + 12);
+    f->eax = read(*(int *)(f->esp + 4), *(void **)(f->esp + 8), *(unsigned int *)(f->esp + 12));
     break;
   case SYS_WRITE:
-    verify_memory_address(thread_current(), argv[1]);
-    f->eax = write((int)argv[0], (const void *)argv[1], (unsigned int)argv[2]);
+    //verify_memory_address(thread_current(), *(void **)(f->esp + 8));
+    //f->eax = write((int)argv[0], (const void *)argv[1], (unsigned int)argv[2]);
+    //f->eax = write((int)argv[0], (const void *)argv[1], (unsigned int)argv[2]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    verify_memory_address(thread_current(), f->esp + 8);
+    verify_memory_address(thread_current(), f->esp + 12);
+    f->eax = write(*(int *)(f->esp + 4), *(void **)(f->esp + 8), *(unsigned int *)(f->esp + 12));
     break;
   case SYS_SEEK:
-    seek((int)argv[0], (unsigned int)argv[1]);
+    //seek((int)argv[0], (unsigned int)argv[1]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    verify_memory_address(thread_current(), f->esp + 8);
+    seek(*(int *)(f->esp + 4), *(unsigned int *)(f->esp + 8));
     break;
   case SYS_TELL:
-    tell((int)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    tell(*(int *)(f->esp + 4));
     break;
   case SYS_CLOSE:
-    close((int)argv[0]);
+    verify_memory_address(thread_current(), f->esp + 4);
+    close(*(int *)(f->esp + 4));
     break;
   }
-  palloc_free_page(argv);
+  //palloc_free_page(argv);
 }

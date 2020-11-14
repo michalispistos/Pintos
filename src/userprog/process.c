@@ -124,7 +124,7 @@ vi Push a fake return address (0)
     total_length += string_length;
     if_.esp -= string_length;
     //*(char **)if_.esp = file_name[i];
-    strlcpy((char **)if_.esp, file_name[i], string_length);
+    strlcpy(if_.esp, file_name[i], string_length);
     //printf("argv[%d]: %s(%p)\n", i, *(char **)(if_.esp), if_.esp);
   }
 
