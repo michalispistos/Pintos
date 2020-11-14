@@ -30,14 +30,16 @@ static int fd = 2;
 
 static void syscall_handler(struct intr_frame *);
 static void exit(int status);
+static bool verify_memory_address(struct thread *t, void **user_pointer);
 
-// Checks that name is not NULL
-static void check_file_name(const char *name)
+// Checks that name is not NULL and verifies the pointer to name
+static void check_content(void *content)
 {
-  if (name == NULL)
+  if (content == NULL)
   {
     exit(-1);
   }
+  verify_memory_address(thread_current(), content);
 }
 
 void syscall_init(void)
@@ -69,6 +71,7 @@ exit(int status)
 // TODO: Check this is correct
 static pid_t exec(const char *cmd_line)
 {
+  check_content((void *)cmd_line);
   lock_acquire(&exec_lock);
   pid_t pid = process_execute(cmd_line);
   lock_release(&exec_lock);
@@ -82,7 +85,8 @@ static int wait(pid_t pid)
 
 static bool create(const char *file, unsigned initial_size)
 {
-  check_file_name(file);
+  check_content((void *)file);
+  //printf("name of file: %s\n", file);
   lock_acquire(&file_lock);
   bool result = filesys_create(file, initial_size);
   lock_release(&file_lock);
@@ -91,7 +95,7 @@ static bool create(const char *file, unsigned initial_size)
 
 static bool remove(const char *file)
 {
-  check_file_name(file);
+  check_content((void *)file);
   lock_acquire(&file_lock);
   bool result = filesys_remove(file);
   lock_release(&file_lock);
@@ -100,7 +104,7 @@ static bool remove(const char *file)
 
 static int open(const char *file)
 {
-  check_file_name(file);
+  check_content((void *)file);
   lock_acquire(&file_lock);
   struct file *file_to_open = filesys_open(file);
   if (file_to_open == NULL)
@@ -109,7 +113,7 @@ static int open(const char *file)
     return -1;
   }
 
-  struct open_file *of = palloc_get_page(PAL_ZERO);
+  struct open_file *of = palloc_get_page(PAL_USER);
   if (of == NULL)
   {
     lock_release(&file_lock);
@@ -118,6 +122,8 @@ static int open(const char *file)
 
   of->fd = fd++;
   of->file = file_to_open;
+  of->file_name = palloc_get_page(PAL_USER);
+  strlcpy(of->file_name, file, strlen(file));
   list_push_front(&thread_current()->open_files, &of->fd_elem);
 
   lock_release(&file_lock);
@@ -146,6 +152,7 @@ static int filesize(int fd)
 
 static int read(int fd, void *buffer, unsigned size)
 {
+  check_content(buffer);
   lock_acquire(&file_lock);
   if (fd == STDIN_FILENO)
   {
@@ -177,8 +184,10 @@ static int read(int fd, void *buffer, unsigned size)
     of = list_entry(e, struct open_file, fd_elem);
     if (of->fd == fd)
     {
-      lock_release(&file_lock);
+      //verify_memory_address(thread_current(), (void **)buffer);
+      //check_file_name(of->file_name);
       // Does not advance position after reading
+      lock_release(&file_lock);
       return file_read_at(of->file, buffer, size, 0);
     }
   }
@@ -190,6 +199,7 @@ static int read(int fd, void *buffer, unsigned size)
 static int
 write(int fd, const void *buffer, unsigned size)
 {
+  check_content((void *)buffer);
   lock_acquire(&file_lock);
 
   // Fd 1 writes to the console
@@ -273,10 +283,10 @@ static void close(int fd)
     {
       file_deny_write(of->file);
       file_close(of->file);
+      list_remove(e);
       break;
     }
   }
-  list_remove(e);
   lock_release(&file_lock);
 }
 
@@ -293,26 +303,6 @@ verify_memory_address(struct thread *t, void **user_pointer)
     exit(-1);
     return false;
   }
-
-  //printf("POINTER: %p\n", user_pointer);
-  /*
-  if (user_pointer == NULL)
-  {
-    exit(-1);
-    return false;
-  }
-  if (!is_user_vaddr(user_pointer))
-  {
-    exit(-1);
-    return false;
-  }
-  if (pagedir_get_page(t->pagedir, user_pointer) == NULL)
-  {
-    exit(-1);
-    return false;
-  }
-  */
-
   //printf("verify successful\n");
   return true;
 }

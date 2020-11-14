@@ -19,7 +19,6 @@
 #include "threads/vaddr.h"
 #include "syscall.h"
 
-//static struct lock process_lock;
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 
@@ -153,6 +152,7 @@ vi Push a fake return address (0)
     int counter = word_align_length + 4 + 4 * (argc - i);
     for (int j = 0; j < i; j++)
     {
+      //printf("2 %s", file_name[j]);
       counter += strlen(file_name[j]) + 1;
     }
     *(char ***)if_.esp = if_.esp + counter;
@@ -308,17 +308,22 @@ void process_exit(void)
         sema_up(&parent->sema);
       }
     }
-    /* Freeing open_files list*/
+    /*Freeing open_files list
+    //????
     for (struct list_elem *e = list_begin(&cur->open_files); e != list_end(&cur->open_files); e = list_next(e))
     {
       palloc_free_page(list_entry(e, struct open_file, fd_elem));
     }
+    */
 
     /* Freeing children list*/
+    //????????????
+    /*
     for (struct list_elem *e = list_begin(&cur->children_info); e != list_end(&cur->children_info); e = list_next(e))
     {
       palloc_free_page(list_entry(e, struct thread_info, child_elem));
     }
+    */
 
     pagedir_destroy(pd);
   }
