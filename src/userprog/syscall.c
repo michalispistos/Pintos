@@ -23,10 +23,14 @@ typedef int pid_t;
 /* Lock needed to use the filesystem. */
 static struct lock file_lock;
 
+static struct lock exec_lock;
+
 /* File descriptor for open. */
 static int fd = 2;
 
-ic vo void syscall_init(void)
+static void syscall_handler(struct intr_frame *);
+
+void syscall_init(void)
 {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&file_lock);
@@ -184,7 +188,6 @@ write(int fd, const void *buffer, unsigned size)
       size -= MAX_SINGLE_BUFFER_SIZE;
     }
     putbuf(buffer + tracker, size);
-    ++;
     lock_release(&file_lock);
     return size;
   }
@@ -277,6 +280,7 @@ verify_memory_address(struct thread *t, void *user_pointer)
 
 /* Retrieve the system call number, then any system call arguments, 
   and carry out appropriate actions
+TODO: Implement fully
 */
 static void
 syscall_handler(struct intr_frame *f)
