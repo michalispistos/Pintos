@@ -29,6 +29,16 @@ static struct lock exec_lock;
 static int fd = 2;
 
 static void syscall_handler(struct intr_frame *);
+static void exit(int status);
+
+// Checks that name is not NULL
+static void check_file_name(const char *name)
+{
+  if (name == NULL)
+  {
+    exit(-1);
+  }
+}
 
 void syscall_init(void)
 {
@@ -72,6 +82,7 @@ static int wait(pid_t pid)
 
 static bool create(const char *file, unsigned initial_size)
 {
+  check_file_name(file);
   lock_acquire(&file_lock);
   bool result = filesys_create(file, initial_size);
   lock_release(&file_lock);
@@ -80,6 +91,7 @@ static bool create(const char *file, unsigned initial_size)
 
 static bool remove(const char *file)
 {
+  check_file_name(file);
   lock_acquire(&file_lock);
   bool result = filesys_remove(file);
   lock_release(&file_lock);
@@ -88,6 +100,7 @@ static bool remove(const char *file)
 
 static int open(const char *file)
 {
+  check_file_name(file);
   lock_acquire(&file_lock);
   struct file *file_to_open = filesys_open(file);
   if (file_to_open == NULL)
@@ -269,7 +282,7 @@ static void close(int fd)
 
 /* Verifies a given memory address. */
 static bool
-verify_memory_address(struct thread *t, void *user_pointer)
+verify_memory_address(struct thread *t, void **user_pointer)
 {
   //printf("verifying!\n");
 
