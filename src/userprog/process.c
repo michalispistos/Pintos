@@ -102,47 +102,85 @@ v Push the number of arguments
 vi Push a fake return address (0)
 */
   /*Seting up the stack*/
+
+  // printf("FILENAME: %s\n", *file_name);
+  // Counting the number of arguments
   int argc = 0;
-  while(file_name[argc]!=NULL){
+  while (file_name[argc] != NULL)
+  {
     argc++;
   }
-  if_.esp=if_.esp-4;
 
-  for(int i=argc-1;i>=0;--i){
-    *(char**)if_.esp = file_name[i];
-    printf("%s(%p)\n",*(char**)(if_.esp),if_.esp);
-    if_.esp=if_.esp-4;
+  // Decrement by 4 as it is initially pointing to PHYS_BASE
+  //if_.esp -= 4;
+  //if_.esp -= strlen(file_name[argc - 1]) + 1;
+
+  // Adding arguments onto the stack, in reverse order
+  int total_length = 0;
+  for (int i = argc - 1; i >= 0; --i)
+  {
+    // +1 due to \0 at the end of each string
+    size_t string_length = strlen(file_name[i]) + 1;
+    total_length += string_length;
+    if_.esp -= string_length;
+    *(char **)if_.esp = file_name[i];
+    printf("argv[%d]: %s(%p)\n", i, *(char **)(if_.esp), if_.esp);
   }
-  *(char**)if_.esp = "\0";
-  printf("%s\n",*(char**)if_.esp);
-  if_.esp=if_.esp-1;
-  //if_.eip;
-  for(int i=argc-1;i>=0;--i){
-    * (char***)if_.esp = if_.esp+(argc-i)+(i+1)*4;
-    printf("%p(%p)\n",*(char***)(if_.esp),if_.esp);
-    if_.esp=if_.esp-1;
+
+  //Word align
+  int word_align_length = 4 - (total_length % 4);
+  if (word_align_length == 4)
+  {
+    word_align_length = 0;
   }
-  * (char****) if_.esp  = if_.esp + 1;
-  printf("%p\n",*(char****)(if_.esp));
-  if_.esp=if_.esp-4;
- 
-  *(int*)if_.esp = argc;
-   printf("%d\n",*(int*)(if_.esp));
-   if_.esp=if_.esp-4;
-  *(int*)if_.esp =0;
-   printf("%d\n",*(int*)(if_.esp));
-  //printf("\n");
-  //printf("Stack start:\n");
- 
-  //printf("%d\n",*(int*)(if_.esp+4));
-  //printf("%p\n",*(char****)(if_.esp+8));
-  //printf("%p\n",*(char***)(if_.esp+9));
-  //printf("%s\n",*(char**)(if_.esp+10));
-  //printf("%s\n",*(char**)(if_.esp+14));
+  else
+  {
+    if_.esp -= word_align_length;
+    *(uint8_t *)if_.esp = 0;
+  }
+
+  // Null pointer sentinel (0)
+  if_.esp -= 4;
+  *(char **)if_.esp = 0;
+  printf("Null pointer sentinel: %s(Address: %p)\n", *(char **)if_.esp, if_.esp);
+  if_.esp -= 4;
+
+  // Push pointers to the arguments in reverse order
+  for (int i = argc - 1; i >= 0; --i)
+  {
+    int counter = word_align_length + 4 + 4 * (argc - i);
+    for (int j = 0; j < i; j++)
+    {
+      counter += strlen(file_name[j]) + 1;
+    }
+    *(char ***)if_.esp = if_.esp + counter;
+    printf("Pointer of argv[%d]: %p(Address: %p)\n", i, *(char **)(if_.esp), if_.esp);
+    if_.esp -= 4;
+  }
+  // Pointer to the first pointer
+  *(char ****)if_.esp = if_.esp + 4;
+  printf("Pointer to the first pointer (address above this): %p\n", *(char ***)(if_.esp));
+  if_.esp = if_.esp - 4;
+
+  // Push number of arguments
+  *(int *)if_.esp = argc;
+  printf("Number of arguments(argc): %d\n", *(int *)(if_.esp));
+
+  // Pushing fake address
+  if_.esp = if_.esp - 4;
+  *(void **)if_.esp = 0;
+  printf("%d\n", *(int *)(if_.esp));
+  // printf("Stack start:\n");
+
+  //printf("%d\n", *(int *)(if_.esp + 4));
+  //printf("%p\n", *(char ****)(if_.esp + 8));
+  //printf("%p\n", *(char ***)(if_.esp + 12));
+  //printf("%s\n", *(char **)(if_.esp + 16));
+  //printf("%s\n", *(char **)(if_.esp + 20));
   //printf("StartEnd\n");
-  printf("%d \n",PHYS_BASE-if_.esp);
-  
-   hex_dump(0,if_.esp,PHYS_BASE-if_.esp,1);
+  // printf("%d \n", PHYS_BASE - if_.esp);
+
+  hex_dump(0, if_.esp, PHYS_BASE - if_.esp, 1);
 
   /* If load failed, quit. */
   palloc_free_page(file_name);
@@ -173,7 +211,7 @@ vi Push a fake return address (0)
  * For now, it does nothing. */
 int process_wait(tid_t child_tid)
 {
-  
+
   bool child_found = false;
   struct thread_info *child_info;
   struct list_elem *e;
@@ -202,7 +240,7 @@ int process_wait(tid_t child_tid)
   }
 
   child_info->has_been_waited_on = true;
-  
+
   /* It is a child that has been terminated. */
   lock_acquire(&child_info->lock);
   if (child_info->self == NULL)
@@ -215,13 +253,13 @@ int process_wait(tid_t child_tid)
     lock_release(&child_info->lock);
     return -1;
   }
-  
+
   //Successful
   //Will be up-ed by waiting child
   child_info->self->is_parent_waiting = true;
   lock_release(&child_info->lock);
   sema_down(&thread_current()->sema);
-  
+
   if (child_info->exited_normally)
   {
     return child_info->exit_code;
@@ -261,14 +299,12 @@ void process_exit(void)
       {
         sema_up(&parent->sema);
       }
-
     }
     /* Freeing open_files list*/
     for (struct list_elem *e = list_begin(&cur->open_files); e != list_end(&cur->open_files); e = list_next(e))
     {
       palloc_free_page(list_entry(e, struct open_file, fd_elem));
     }
-
 
     /* Freeing children list*/
     for (struct list_elem *e = list_begin(&cur->children_info); e != list_end(&cur->children_info); e = list_next(e))
