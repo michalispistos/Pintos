@@ -83,6 +83,7 @@ static void
 start_process(void *file_name_)
 {
   char **file_name = file_name_;
+
   struct intr_frame if_;
   bool success;
 
@@ -103,7 +104,6 @@ vi Push a fake return address (0)
 */
   /*Seting up the stack*/
 
-  // printf("FILENAME: %s\n", *file_name);
   // Counting the number of arguments
   int argc = 0;
   while (file_name[argc] != NULL)
@@ -123,8 +123,9 @@ vi Push a fake return address (0)
     size_t string_length = strlen(file_name[i]) + 1;
     total_length += string_length;
     if_.esp -= string_length;
-    *(char **)if_.esp = file_name[i];
-    printf("argv[%d]: %s(%p)\n", i, *(char **)(if_.esp), if_.esp);
+    //*(char **)if_.esp = file_name[i];
+    strlcpy((char **)if_.esp, file_name[i], string_length);
+    //printf("argv[%d]: %s(%p)\n", i, *(char **)(if_.esp), if_.esp);
   }
 
   //Word align
@@ -138,11 +139,12 @@ vi Push a fake return address (0)
     if_.esp -= word_align_length;
     *(uint8_t *)if_.esp = 0;
   }
+  //printf("Word align size: %d(%p)\n", word_align_length, if_.esp);
 
   // Null pointer sentinel (0)
   if_.esp -= 4;
   *(char **)if_.esp = 0;
-  printf("Null pointer sentinel: %s(Address: %p)\n", *(char **)if_.esp, if_.esp);
+  // printf("Null pointer sentinel: %s(Address: %p)\n", *(char **)if_.esp, if_.esp);
   if_.esp -= 4;
 
   // Push pointers to the arguments in reverse order
@@ -154,22 +156,22 @@ vi Push a fake return address (0)
       counter += strlen(file_name[j]) + 1;
     }
     *(char ***)if_.esp = if_.esp + counter;
-    printf("Pointer of argv[%d]: %p(Address: %p)\n", i, *(char **)(if_.esp), if_.esp);
+    // printf("Pointer of argv[%d]: %p(Address: %p)\n", i, *(char **)(if_.esp), if_.esp);
     if_.esp -= 4;
   }
   // Pointer to the first pointer
   *(char ****)if_.esp = if_.esp + 4;
-  printf("Pointer to the first pointer (address above this): %p\n", *(char ***)(if_.esp));
-  if_.esp = if_.esp - 4;
+  //printf("Pointer to the first pointer (address above this): %p (%p)\n", *(char ***)(if_.esp), if_.esp);
+  if_.esp -= 4;
 
   // Push number of arguments
   *(int *)if_.esp = argc;
-  printf("Number of arguments(argc): %d\n", *(int *)(if_.esp));
+  // printf("Number of arguments(argc): %d(%p)\n", *(int *)(if_.esp), if_.esp);
 
   // Pushing fake address
   if_.esp = if_.esp - 4;
   *(void **)if_.esp = 0;
-  printf("%d\n", *(int *)(if_.esp));
+  //printf("Fake address: %p\n", (if_.esp));
   // printf("Stack start:\n");
 
   //printf("%d\n", *(int *)(if_.esp + 4));
@@ -180,7 +182,7 @@ vi Push a fake return address (0)
   //printf("StartEnd\n");
   // printf("%d \n", PHYS_BASE - if_.esp);
 
-  hex_dump(0, if_.esp, PHYS_BASE - if_.esp, 1);
+  //hex_dump(0, if_.esp, PHYS_BASE - if_.esp, 1);
 
   /* If load failed, quit. */
   palloc_free_page(file_name);
@@ -211,6 +213,7 @@ vi Push a fake return address (0)
  * For now, it does nothing. */
 int process_wait(tid_t child_tid)
 {
+  //printf("started wait\n");
 
   bool child_found = false;
   struct thread_info *child_info;
@@ -227,6 +230,7 @@ int process_wait(tid_t child_tid)
       child_found = true;
       if (child_info->has_been_waited_on)
       {
+        //printf("wait finished early, has been waited on\n");
         return -1;
       }
       break;
@@ -236,6 +240,7 @@ int process_wait(tid_t child_tid)
   /* This is the case where the tid is invalid or not a child thread. */
   if (!child_found)
   {
+    //printf("wait finished early, child not found\n");
     return -1;
   }
 
@@ -248,9 +253,11 @@ int process_wait(tid_t child_tid)
     if (child_info->exited_normally)
     {
       lock_release(&child_info->lock);
+      //printf("wait exited normally, child already teriminated, return exit code\n");
       return child_info->exit_code;
     }
     lock_release(&child_info->lock);
+    //printf("wait terminated early, child terminated and did not exit normally\n");
     return -1;
   }
 
@@ -262,6 +269,7 @@ int process_wait(tid_t child_tid)
 
   if (child_info->exited_normally)
   {
+    //printf("wait successful, return exit code: %d\n", child_info->exit_code);
     return child_info->exit_code;
   }
   return -1;
