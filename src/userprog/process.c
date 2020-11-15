@@ -33,13 +33,21 @@ tid_t process_execute(const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page(PAL_ZERO | PAL_USER);
+  fn_copy = palloc_get_page(PAL_ZERO);
   if (fn_copy == NULL)
+  {
+    //printf("fncopy palloc failed\n");
     return TID_ERROR;
+  }
+
   strlcpy(fn_copy, file_name, PGSIZE);
 
   char *token, *save_ptr;
-  char **args = palloc_get_page(PAL_ZERO | PAL_USER);
+  char **args = palloc_get_page(PAL_ZERO);
+  if (!args)
+  {
+    return TID_ERROR;
+  }
   int i = 0;
   for (token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
        token = strtok_r(NULL, " ", &save_ptr))
@@ -55,7 +63,7 @@ tid_t process_execute(const char *file_name)
     palloc_free_page(args);
   }
 
-  struct thread_info *child_info = palloc_get_page(PAL_USER);
+  struct thread_info *child_info = palloc_get_page(PAL_ZERO);
   if (child_info == NULL)
   {
     return TID_ERROR;
@@ -84,6 +92,7 @@ tid_t process_execute(const char *file_name)
   {
     return TID_ERROR;
   }
+
   return tid;
 }
 
@@ -265,16 +274,16 @@ int process_wait(tid_t child_tid)
   child_info->has_been_waited_on = true;
 
   /* It is a child that has been terminated. */
-  lock_acquire(&child_info->lock);
+  //lock_acquire(&child_info->lock);
   if (child_info->self == NULL)
   {
     if (child_info->exited_normally)
     {
-      lock_release(&child_info->lock);
+      // lock_release(&child_info->lock);
       //printf("wait exited normally, child already teriminated, return exit code\n");
       return child_info->exit_code;
     }
-    lock_release(&child_info->lock);
+    //lock_release(&child_info->lock);
     //printf("wait terminated early, child terminated and did not exit normally\n");
     return -1;
   }
@@ -282,7 +291,7 @@ int process_wait(tid_t child_tid)
   //Successful
   //Will be up-ed by waiting child
   child_info->self->is_parent_waiting = true;
-  lock_release(&child_info->lock);
+  // lock_release(&child_info->lock);
   sema_down(&thread_current()->sema);
 
   if (child_info->exited_normally)
@@ -326,22 +335,27 @@ void process_exit(void)
         sema_up(&parent->sema);
       }
     }
-    /*Freeing open_files list
-    //????
-    for (struct list_elem *e = list_begin(&cur->open_files); e != list_end(&cur->open_files); e = list_next(e))
+
+    struct list_elem *e;
+    /* Freeing open files list*/
+    e = list_begin(&cur->open_files);
+    while (e != list_end(&cur->open_files))
     {
+      struct list_elem *temp = list_next(e);
+      list_remove(e);
       palloc_free_page(list_entry(e, struct open_file, fd_elem));
+      e = temp;
     }
-    */
 
     /* Freeing children list*/
-    //????????????
-    /*
-    for (struct list_elem *e = list_begin(&cur->children_info); e != list_end(&cur->children_info); e = list_next(e))
+    e = list_begin(&cur->children_info);
+    while (e != list_end(&cur->children_info))
     {
+      struct list_elem *temp = list_next(e);
+      list_remove(e);
       palloc_free_page(list_entry(e, struct thread_info, child_elem));
+      e = temp;
     }
-    */
 
     pagedir_destroy(pd);
   }
