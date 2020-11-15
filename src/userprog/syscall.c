@@ -115,7 +115,7 @@ int open(const char *file)
     return -1;
   }
 
-  struct open_file *of = palloc_get_page(PAL_USER);
+  struct open_file *of = palloc_get_page(PAL_ZERO);
   if (of == NULL)
   {
     lock_release(&file_lock);
@@ -124,10 +124,7 @@ int open(const char *file)
 
   of->fd = fd++;
   of->file = file_to_open;
-  of->file_name = palloc_get_page(PAL_USER);
-  strlcpy(of->file_name, file, strlen(file));
   list_push_front(&thread_current()->open_files, &of->fd_elem);
-
   lock_release(&file_lock);
   return of->fd;
 }
@@ -156,26 +153,23 @@ int read(int fd, void *buffer, unsigned size)
 {
   check_content(buffer);
   lock_acquire(&file_lock);
+  for (unsigned i = 0; i < size; i += PGSIZE)
+  {
+    if (!is_user_vaddr(buffer + i) || pagedir_get_page(thread_current()->pagedir, buffer + i) == NULL)
+    {
+      lock_release(&file_lock);
+      return -1;
+    }
+  }
   if (fd == STDIN_FILENO)
   {
     char *buffer_ = (char *)buffer;
-    uint32_t buffer_length = strlen(buffer_);
-    char word[size];
-    for (uint32_t i = 0; i < size; i++)
+    for (unsigned tracker = 0; tracker < size; tracker++)
     {
-      word[i] = input_getc();
+      buffer_[tracker] = input_getc();
     }
-    strlcpy(buffer_, word, size);
-    if (buffer_length <= size)
-    {
-      lock_release(&file_lock);
-      return buffer_length;
-    }
-    else
-    {
-      lock_release(&file_lock);
-      return size;
-    }
+    lock_release(&file_lock);
+    return size;
   }
 
   struct list_elem *e;
@@ -192,6 +186,7 @@ int read(int fd, void *buffer, unsigned size)
       return file_read_at(of->file, buffer, size, 0);
     }
   }
+  // Fail
   lock_release(&file_lock);
   return -1;
 }
@@ -205,24 +200,22 @@ int write(int fd, const void *buffer, unsigned size)
   // verify_memory_address(thread_current(), *(char *)buffer + size - 1);
   lock_acquire(&file_lock);
   //printf("BUF: %s\n", (char *)buffer);
-
   // Fd 1 writes to the console
   //printf("REACHED WRITE\n");
-
   if (fd == STDOUT_FILENO)
   {
+    unsigned temp_size = size;
     int tracker = 0;
-    while (size > MAX_SINGLE_BUFFER_SIZE)
+    while (temp_size > MAX_SINGLE_BUFFER_SIZE)
     {
-      check_content((void *)(buffer + MAX_SINGLE_BUFFER_SIZE));
+      //check_content((void *)(buffer + MAX_SINGLE_BUFFER_SIZE));
       putbuf(buffer + tracker, MAX_SINGLE_BUFFER_SIZE);
       tracker += MAX_SINGLE_BUFFER_SIZE;
-      size -= MAX_SINGLE_BUFFER_SIZE;
+      temp_size -= MAX_SINGLE_BUFFER_SIZE;
+      // verify_memory_address(thread_current(), (buffer + temp_size));
     }
-    verify_memory_address(thread_current(), (buffer + size));
-    putbuf(buffer + tracker, size);
+    putbuf(buffer + tracker, temp_size);
     lock_release(&file_lock);
-    //printf("GOt here, size:\n%d", size);
     return size;
   }
   struct list_elem *e;
@@ -233,8 +226,8 @@ int write(int fd, const void *buffer, unsigned size)
     if (of->fd == fd)
     {
       lock_release(&file_lock);
-      // Advances position after writing
-      // Make sure can't write to program file
+      /* Advances position after writing
+       Make sure can't write to program file */
       return file_write(of->file, buffer, size);
     }
   }
