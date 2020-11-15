@@ -14,6 +14,7 @@
 #include "devices/shutdown.h"
 #include "lib/string.h"
 #include "devices/input.h"
+#include "lib/user/syscall.h"
 
 typedef int pid_t;
 
@@ -29,11 +30,11 @@ static struct lock exec_lock;
 static int fd = 2;
 
 static void syscall_handler(struct intr_frame *);
-static void exit(int status);
+void exit(int status);
 static bool verify_memory_address(struct thread *t, void **user_pointer);
 
 // Checks that name is not NULL and verifies the pointer to name
-static void check_content(void *content)
+void check_content(void *content)
 {
   if (content == NULL)
   {
@@ -49,14 +50,13 @@ void syscall_init(void)
   lock_init(&exec_lock);
 }
 
-static void halt(void)
+void halt(void)
 {
   shutdown_power_off();
 }
 
 /* Terminates the current user program */
-static void
-exit(int status)
+void exit(int status)
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);
   struct thread_info *info = thread_current()->thread_info;
@@ -68,22 +68,24 @@ exit(int status)
   thread_exit();
 }
 
-// TODO: Check this is correct
-static pid_t exec(const char *cmd_line)
+pid_t exec(const char *cmd_line)
 {
   check_content((void *)cmd_line);
+  //printf("in exec,cmd_line = %s\n", cmd_line);
   lock_acquire(&exec_lock);
+  // pid_t pid;
+  // pid = wait(process_execute(cmd_line));
   pid_t pid = process_execute(cmd_line);
   lock_release(&exec_lock);
   return pid;
 }
 
-static int wait(pid_t pid)
+int wait(pid_t pid)
 {
   return process_wait(pid);
 }
 
-static bool create(const char *file, unsigned initial_size)
+bool create(const char *file, unsigned initial_size)
 {
   check_content((void *)file);
   //printf("name of file: %s\n", file);
@@ -93,7 +95,7 @@ static bool create(const char *file, unsigned initial_size)
   return result;
 }
 
-static bool remove(const char *file)
+bool remove(const char *file)
 {
   check_content((void *)file);
   lock_acquire(&file_lock);
@@ -102,7 +104,7 @@ static bool remove(const char *file)
   return result;
 }
 
-static int open(const char *file)
+int open(const char *file)
 {
   check_content((void *)file);
   lock_acquire(&file_lock);
@@ -130,7 +132,7 @@ static int open(const char *file)
   return of->fd;
 }
 
-static int filesize(int fd)
+int filesize(int fd)
 {
   struct list_elem *e;
   struct open_file *of;
@@ -150,7 +152,7 @@ static int filesize(int fd)
   return -1;
 }
 
-static int read(int fd, void *buffer, unsigned size)
+int read(int fd, void *buffer, unsigned size)
 {
   check_content(buffer);
   lock_acquire(&file_lock);
@@ -185,7 +187,6 @@ static int read(int fd, void *buffer, unsigned size)
     if (of->fd == fd)
     {
       //verify_memory_address(thread_current(), (void **)buffer);
-      //check_file_name(of->file_name);
       // Does not advance position after reading
       lock_release(&file_lock);
       return file_read_at(of->file, buffer, size, 0);
@@ -196,28 +197,34 @@ static int read(int fd, void *buffer, unsigned size)
 }
 
 /* Writes size bytes from buffer to the open file fd. */
-static int
-write(int fd, const void *buffer, unsigned size)
+int write(int fd, const void *buffer, unsigned size)
 {
   check_content((void *)buffer);
+  // check_content(*(char *)buffer);
+  //verify_memory_address(thread_current(), *(char *)buffer);
+  // verify_memory_address(thread_current(), *(char *)buffer + size - 1);
   lock_acquire(&file_lock);
+  //printf("BUF: %s\n", (char *)buffer);
 
   // Fd 1 writes to the console
   //printf("REACHED WRITE\n");
+
   if (fd == STDOUT_FILENO)
   {
     int tracker = 0;
     while (size > MAX_SINGLE_BUFFER_SIZE)
     {
+      check_content((void *)(buffer + MAX_SINGLE_BUFFER_SIZE));
       putbuf(buffer + tracker, MAX_SINGLE_BUFFER_SIZE);
       tracker += MAX_SINGLE_BUFFER_SIZE;
       size -= MAX_SINGLE_BUFFER_SIZE;
     }
+    verify_memory_address(thread_current(), (buffer + size));
     putbuf(buffer + tracker, size);
     lock_release(&file_lock);
+    //printf("GOt here, size:\n%d", size);
     return size;
   }
-
   struct list_elem *e;
   struct open_file *of;
   for (e = list_begin(&thread_current()->open_files); e != list_end(&thread_current()->open_files); e = list_next(e))
@@ -235,7 +242,7 @@ write(int fd, const void *buffer, unsigned size)
   return 0;
 }
 
-static void seek(int fd, unsigned position)
+void seek(int fd, unsigned position)
 {
   lock_acquire(&file_lock);
   struct list_elem *e;
@@ -253,7 +260,7 @@ static void seek(int fd, unsigned position)
   lock_release(&file_lock);
 }
 
-static unsigned tell(int fd)
+unsigned tell(int fd)
 {
   lock_acquire(&file_lock);
   struct list_elem *e;
@@ -271,7 +278,7 @@ static unsigned tell(int fd)
   return -1;
 }
 
-static void close(int fd)
+void close(int fd)
 {
   lock_acquire(&file_lock);
   struct list_elem *e;
@@ -294,16 +301,11 @@ static void close(int fd)
 static bool
 verify_memory_address(struct thread *t, void **user_pointer)
 {
-  //printf("verifying!\n");
-
   if (!user_pointer || !is_user_vaddr(user_pointer) || pagedir_get_page(t->pagedir, user_pointer) == NULL)
   {
-    //printf("INVALID ADDRESS verify failed\n");
-    //pagedir_destroy(t->pagedir);
     exit(-1);
     return false;
   }
-  //printf("verify successful\n");
   return true;
 }
 
@@ -316,7 +318,7 @@ syscall_handler(struct intr_frame *f)
 {
   verify_memory_address(thread_current(), f->esp);
   int syscall_num = *(int *)(f->esp);
-
+  //printf("Sycall_num:%d\n", syscall_num);
   if (syscall_num == 1)
   {
     //printf("EXIT CODE = %d\n", *(int *)(f->esp + 4));
@@ -398,6 +400,7 @@ syscall_handler(struct intr_frame *f)
     verify_memory_address(thread_current(), f->esp + 4);
     verify_memory_address(thread_current(), f->esp + 8);
     verify_memory_address(thread_current(), f->esp + 12);
+    //printf("verified and write\n");
     f->eax = write(*(int *)(f->esp + 4), *(void **)(f->esp + 8), *(unsigned int *)(f->esp + 12));
     break;
   case SYS_SEEK:

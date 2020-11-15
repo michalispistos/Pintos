@@ -4,6 +4,8 @@
 #define USERPROG_SYSCALL_H
 
 void syscall_init(void);
+void check_content(void *content);
+void exit(int status);
 
 struct open_file
 {
