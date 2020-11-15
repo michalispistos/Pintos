@@ -33,13 +33,13 @@ tid_t process_execute(const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page(0);
+  fn_copy = palloc_get_page(PAL_ZERO | PAL_USER);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
   char *token, *save_ptr;
-  char **args = palloc_get_page(0);
+  char **args = palloc_get_page(PAL_ZERO | PAL_USER);
   int i = 0;
   for (token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
        token = strtok_r(NULL, " ", &save_ptr))
@@ -47,6 +47,7 @@ tid_t process_execute(const char *file_name)
     args[i] = token;
     ++i;
   }
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(args[0], PRI_DEFAULT, start_process, args);
   if (tid == TID_ERROR)
@@ -54,16 +55,20 @@ tid_t process_execute(const char *file_name)
     palloc_free_page(args);
   }
 
-  /* Creating a child_thread_info struct for the child */
-  struct thread_info *child_info = palloc_get_page(PAL_ZERO);
+  struct thread_info *child_info = palloc_get_page(PAL_USER);
   if (child_info == NULL)
   {
     return TID_ERROR;
   }
+
+  /* Creating a child_thread_info struct for the child */
+
   child_info->tid = tid;
   child_info->has_been_waited_on = false;
   child_info->exited_normally = false;
+  child_info->load_failed = false;
   lock_init(&child_info->lock);
+  sema_init(&child_info->sema, 0);
 
   struct thread *child = get_thread_from_tid(tid);
   struct thread *parent = get_thread_from_tid(child->parent_tid);
@@ -73,6 +78,12 @@ tid_t process_execute(const char *file_name)
   child->thread_info = child_info;
   child_info->self = child;
 
+  //sema_down(&child->sema);
+  sema_down(&child_info->sema);
+  if (child_info->load_failed)
+  {
+    return TID_ERROR;
+  }
   return tid;
 }
 
@@ -81,6 +92,7 @@ tid_t process_execute(const char *file_name)
 static void
 start_process(void *file_name_)
 {
+  //sema_up(&thread_current()->thread_info->sema);
   char **file_name = file_name_;
 
   struct intr_frame if_;
@@ -92,7 +104,11 @@ start_process(void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load(file_name[0], &if_.eip, &if_.esp);
-
+  //sema_up(&thread_current()->thread_info->sema);
+  if (!success)
+  {
+    thread_exit();
+  }
   /*
 i Push the arguments onto the stack, one by one, in reverse order
 ii Push a null pointer sentinel (0)
@@ -123,6 +139,7 @@ vi Push a fake return address (0)
     total_length += string_length;
     if_.esp -= string_length;
     //*(char **)if_.esp = file_name[i];
+    //printf("filename in startprocess: %s\n", file_name[i]);
     strlcpy(if_.esp, file_name[i], string_length);
     //printf("argv[%d]: %s(%p)\n", i, *(char **)(if_.esp), if_.esp);
   }
@@ -185,6 +202,7 @@ vi Push a fake return address (0)
   //hex_dump(0, if_.esp, PHYS_BASE - if_.esp, 1);
 
   /* If load failed, quit. */
+
   palloc_free_page(file_name);
   if (!success)
     thread_exit();
@@ -283,6 +301,7 @@ void process_exit(void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+
   pd = cur->pagedir;
   if (pd != NULL)
   {
@@ -295,7 +314,6 @@ void process_exit(void)
          that's been freed (and cleared). */
     cur->pagedir = NULL;
     pagedir_activate(NULL);
-
     lock_acquire(&cur->thread_info->lock);
     lock_release(&cur->thread_info->lock);
     file_close(cur->executable);
@@ -433,10 +451,12 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   process_activate();
 
   /* Open executable file. */
+  //printf("The filename in load: %s\n", file_name);
   file = filesys_open(file_name);
   if (file == NULL)
   {
     printf("load: %s: open failed\n", file_name);
+    t->thread_info->load_failed = true;
     goto done;
   }
 
@@ -446,6 +466,8 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     printf("load: %s: error loading executable\n", file_name);
     goto done;
   }
+
+  sema_up(&thread_current()->thread_info->sema);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -513,11 +535,15 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   *eip = (void (*)(void))ehdr.e_entry;
 
   success = true;
+  file_deny_write(file);
+  t->executable = file;
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_deny_write(file);
-  t->executable = file;
+  //printf("above sema up\n");
+  //sema_up(&t->sema);
+  //sema_up(&t->thread_info->sema);
+  sema_up(&thread_current()->thread_info->sema);
   return success;
 }
 

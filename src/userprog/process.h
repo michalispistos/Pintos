@@ -11,8 +11,10 @@ struct thread_info
     int exit_code;               /* Exit code of the child thread. */
     bool has_been_waited_on;     /* True if child thread has been called by process_wait(). */
     bool exited_normally;        /* True if exit() was called on it. */
-    struct thread *self;         /* A pointer to a thread with id tid. */ 
+    struct thread *self;         /* A pointer to a thread with id tid. */
     struct lock lock;            /* A lock to prevent child from dying during process wait */
+    bool load_failed;
+    struct semaphore sema;
 };
 
 tid_t process_execute(const char *file_name);
