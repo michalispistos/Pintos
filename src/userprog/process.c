@@ -64,6 +64,7 @@ tid_t process_execute(const char *file_name)
   }
 
   struct thread_info *child_info = palloc_get_page(PAL_ZERO);
+
   if (child_info == NULL)
   {
     return TID_ERROR;
@@ -76,7 +77,7 @@ tid_t process_execute(const char *file_name)
   child_info->exited_normally = false;
   child_info->load_failed = false;
   lock_init(&child_info->lock);
-  sema_init(&child_info->sema, 0);
+  sema_init(&child_info->wait_sema, 0);
 
   struct thread *child = get_thread_from_tid(tid);
   struct thread *parent = get_thread_from_tid(child->parent_tid);
@@ -87,7 +88,9 @@ tid_t process_execute(const char *file_name)
   child_info->self = child;
 
   //sema_down(&child->sema);
-  sema_down(&child_info->sema);
+  //sema_down(&child_info->sema);
+  sema_init(&thread_current()->load_sema, 0);
+  sema_down(&thread_current()->load_sema);
   if (child_info->load_failed)
   {
     return TID_ERROR;
@@ -112,12 +115,13 @@ start_process(void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  //lock_acquire(&file_lock);
   success = load(file_name[0], &if_.eip, &if_.esp);
-  //sema_up(&thread_current()->thread_info->sema);
+
   if (!success)
-  {
     thread_exit();
-  }
+  //lock_release(&file_lock);
+  //sema_up(&thread_current()->thread_info->sema);
   /*
 i Push the arguments onto the stack, one by one, in reverse order
 ii Push a null pointer sentinel (0)
@@ -211,6 +215,7 @@ vi Push a fake return address (0)
   //hex_dump(0, if_.esp, PHYS_BASE - if_.esp, 1);
 
   /* If load failed, quit. */
+  //sema_up(&thread_current()->thread_info->sema);
 
   palloc_free_page(file_name);
   if (!success)
@@ -271,15 +276,19 @@ int process_wait(tid_t child_tid)
     return -1;
   }
 
+  //sema_init(&thread_current()->sema, 0);
   child_info->has_been_waited_on = true;
 
   /* It is a child that has been terminated. */
   //lock_acquire(&child_info->lock);
+  //sema_init(&child_info->wait_sema, 0);
+  child_info->self->is_parent_waiting = true;
+
   if (child_info->self == NULL)
   {
     if (child_info->exited_normally)
     {
-      // lock_release(&child_info->lock);
+      //lock_release(&child_info->lock);
       //printf("wait exited normally, child already teriminated, return exit code\n");
       return child_info->exit_code;
     }
@@ -290,10 +299,13 @@ int process_wait(tid_t child_tid)
 
   //Successful
   //Will be up-ed by waiting child
-  child_info->self->is_parent_waiting = true;
+  //child_info->self->is_parent_waiting = true;
   // lock_release(&child_info->lock);
-  sema_down(&thread_current()->sema);
 
+  //sema_down(&thread_current()->sema);
+  // printf("SEMA DOWNED\n");
+  sema_down(&child_info->wait_sema);
+  // printf("REACHED AFTER SEMA DOWN\n");
   if (child_info->exited_normally)
   {
     //printf("wait successful, return exit code: %d\n", child_info->exit_code);
@@ -323,10 +335,11 @@ void process_exit(void)
          that's been freed (and cleared). */
     cur->pagedir = NULL;
     pagedir_activate(NULL);
-    lock_acquire(&cur->thread_info->lock);
-    lock_release(&cur->thread_info->lock);
+    //lock_acquire(&cur->thread_info->lock);
+    //lock_release(&cur->thread_info->lock);
     file_close(cur->executable);
 
+    /*
     if (cur->is_parent_waiting)
     {
       struct thread *parent = get_thread_from_tid(cur->parent_tid);
@@ -335,6 +348,9 @@ void process_exit(void)
         sema_up(&parent->sema);
       }
     }
+    */
+    sema_up(&cur->thread_info->wait_sema);
+    //printf("CHILD INFO SEMA UPED");
 
     struct list_elem *e;
     /* Freeing open files list*/
@@ -471,6 +487,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   {
     printf("load: %s: open failed\n", file_name);
     t->thread_info->load_failed = true;
+    sema_up(&get_thread_from_tid(thread_current()->parent_tid)->load_sema);
     goto done;
   }
 
@@ -478,10 +495,12 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024)
   {
     printf("load: %s: error loading executable\n", file_name);
+    sema_up(&get_thread_from_tid(thread_current()->parent_tid)->load_sema);
     goto done;
   }
 
-  sema_up(&thread_current()->thread_info->sema);
+  sema_up(&get_thread_from_tid(thread_current()->parent_tid)->load_sema);
+  //sema_up(&thread_current()->thread_info->sema);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -550,6 +569,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 
   success = true;
   file_deny_write(file);
+  //file_close(file);
   t->executable = file;
 
 done:
@@ -557,7 +577,7 @@ done:
   //printf("above sema up\n");
   //sema_up(&t->sema);
   //sema_up(&t->thread_info->sema);
-  sema_up(&thread_current()->thread_info->sema);
+  //sema_up(&thread_current()->thread_info->sema);
   return success;
 }
 
