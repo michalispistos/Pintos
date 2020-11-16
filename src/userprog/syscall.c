@@ -21,9 +21,7 @@ typedef int pid_t;
 /* The maximum size for a single buffer to be written to the console. */
 #define MAX_SINGLE_BUFFER_SIZE (256)
 
-/* Lock needed to use the filesystem. */
-static struct lock file_lock;
-
+/* Lock needed to use the exec system call */
 static struct lock exec_lock;
 
 /* File descriptor for open. */
@@ -72,11 +70,11 @@ pid_t exec(const char *cmd_line)
 {
   check_content((void *)cmd_line);
   //printf("in exec,cmd_line = %s\n", cmd_line);
-  lock_acquire(&exec_lock);
+  lock_acquire(&file_lock);
   // pid_t pid;
   // pid = wait(process_execute(cmd_line));
   pid_t pid = process_execute(cmd_line);
-  lock_release(&exec_lock);
+  lock_release(&file_lock);
   return pid;
 }
 
