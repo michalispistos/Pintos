@@ -79,9 +79,8 @@ tid_t process_execute(const char *file_name)
   sema_init(&child_info->load_sema, 0);
 
   struct thread *child = get_thread_from_tid(tid);
-  struct thread *parent = get_thread_from_tid(child->parent_tid);
   lock_acquire(&child_info->lock);
-  list_push_front(&parent->children_info, &child_info->child_elem);
+  list_push_front(&thread_current()->children_info, &child_info->child_elem);
   lock_release(&child_info->lock);
   child->thread_info = child_info;
   child_info->self = child;
