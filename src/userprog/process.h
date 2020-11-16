@@ -16,6 +16,7 @@ struct thread_info
     bool load_failed;            /* True if thread failed to load. */
     struct semaphore wait_sema;  /* A semaphore used for process_wait(). */
     struct semaphore load_sema;  /* A semaphore used to block parent thread until child loads. */
+    char **args;                 /* Arguments needed for argument parsing */
 };
 
 tid_t process_execute(const char *file_name);
