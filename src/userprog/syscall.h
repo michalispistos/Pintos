@@ -3,11 +3,8 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
-/* Lock needed to use the filesystem. */
-
 void syscall_init(void);
 void check_content(void *content);
-
 struct open_file
 {
     struct list_elem fd_elem;
