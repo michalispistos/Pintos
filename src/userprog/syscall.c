@@ -19,7 +19,7 @@
 typedef int pid_t;
 
 /* The maximum size for a single buffer to be written to the console. */
-#define MAX_SINGLE_BUFFER_SIZE (200)
+#define MAX_SINGLE_BUFFER_SIZE (256)
 
 /* Lock needed to use the filesystem. */
 static struct lock file_lock;
@@ -155,7 +155,7 @@ int read(int fd, void *buffer, unsigned size)
   lock_acquire(&file_lock);
   for (unsigned i = 0; i < size; i += PGSIZE)
   {
-    if (!is_user_vaddr(buffer + i) || pagedir_get_page(thread_current()->pagedir, buffer + i) == NULL)
+    if ((buffer + i) == NULL || !is_user_vaddr(buffer + i) || pagedir_get_page(thread_current()->pagedir, buffer + i) == NULL)
     {
       lock_release(&file_lock);
       return -1;
@@ -183,7 +183,8 @@ int read(int fd, void *buffer, unsigned size)
       //verify_memory_address(thread_current(), (void **)buffer);
       // Does not advance position after reading
       lock_release(&file_lock);
-      return file_read_at(of->file, buffer, size, 0);
+      return file_read(of->file, buffer, size);
+      //return file_read_at(of->file, buffer, size, 0);
     }
   }
   // Fail
@@ -195,26 +196,31 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, const void *buffer, unsigned size)
 {
   check_content((void *)buffer);
-  // check_content(*(char *)buffer);
-  //verify_memory_address(thread_current(), *(char *)buffer);
-  // verify_memory_address(thread_current(), *(char *)buffer + size - 1);
   lock_acquire(&file_lock);
   //printf("BUF: %s\n", (char *)buffer);
   // Fd 1 writes to the console
   //printf("REACHED WRITE\n");
+  for (unsigned i = 0; i < size; i += PGSIZE)
+  {
+    if ((buffer + i) == NULL || !is_user_vaddr(buffer + i) || pagedir_get_page(thread_current()->pagedir, buffer + i) == NULL)
+    {
+      lock_release(&file_lock);
+      return -1;
+    }
+  }
   if (fd == STDOUT_FILENO)
   {
     unsigned temp_size = size;
-    int tracker = 0;
-    while (temp_size > MAX_SINGLE_BUFFER_SIZE)
+    //int tracker = 0;
+    while (temp_size >= MAX_SINGLE_BUFFER_SIZE)
     {
       //check_content((void *)(buffer + MAX_SINGLE_BUFFER_SIZE));
-      putbuf(buffer + tracker, MAX_SINGLE_BUFFER_SIZE);
-      tracker += MAX_SINGLE_BUFFER_SIZE;
+      putbuf(buffer, MAX_SINGLE_BUFFER_SIZE);
+      //tracker += MAX_SINGLE_BUFFER_SIZE;
       temp_size -= MAX_SINGLE_BUFFER_SIZE;
       // verify_memory_address(thread_current(), (buffer + temp_size));
     }
-    putbuf(buffer + tracker, temp_size);
+    putbuf(buffer, temp_size);
     lock_release(&file_lock);
     return size;
   }
