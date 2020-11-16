@@ -24,6 +24,9 @@ typedef int pid_t;
 /* Lock needed to use the exec system call */
 static struct lock exec_lock;
 
+/* Lock needed to use the filesystem. */
+static struct lock file_lock;
+
 /* File descriptor for open. */
 static int fd = 2;
 
