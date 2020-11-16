@@ -12,9 +12,10 @@ struct thread_info
     bool has_been_waited_on;     /* True if child thread has been called by process_wait(). */
     bool exited_normally;        /* True if exit() was called on it. */
     struct thread *self;         /* A pointer to a thread with id tid. */
-    struct lock lock;            /* A lock to prevent child from dying during process wait */
-    bool load_failed;
-    struct semaphore wait_sema;
+    struct lock lock;            /* A lock to prevent child from dying during process_wait(). */
+    bool load_failed;            /* True if thread failed to load. */
+    struct semaphore wait_sema;  /* A semaphore used for process_wait(). */
+    struct semaphore load_sema;  /* A semaphore used to block parent thread until child loads. */
 };
 
 tid_t process_execute(const char *file_name);

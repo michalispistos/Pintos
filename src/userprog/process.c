@@ -64,13 +64,12 @@ tid_t process_execute(const char *file_name)
     palloc_free_page(args);
   }
 
-  /* Setting up thread_info struct for child. */
+  /* Setting up and initializing thread_info struct for child. */
   struct thread_info *child_info = palloc_get_page(PAL_ZERO);
   if (child_info == NULL)
   {
     return TID_ERROR;
   }
-
   child_info->tid = tid;
   child_info->has_been_waited_on = false;
   child_info->exited_normally = false;
@@ -93,7 +92,6 @@ tid_t process_execute(const char *file_name)
   {
     return TID_ERROR;
   }
-
   return tid;
 }
 
