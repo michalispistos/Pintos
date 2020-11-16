@@ -14,6 +14,7 @@
 #include "devices/shutdown.h"
 #include "lib/string.h"
 #include "devices/input.h"
+#include "threads/malloc.h"
 
 /* The maximum size for a single buffer to be written to the console. */
 #define MAX_SINGLE_BUFFER_SIZE (256)
@@ -141,7 +142,7 @@ static int open(struct intr_frame *f)
     lock_release(&file_lock);
     return -1;
   }
-  struct open_file *of = palloc_get_page(PAL_ZERO);
+  struct open_file *of = malloc(sizeof(struct open_file));
   if (of == NULL)
   {
     lock_release(&file_lock);
@@ -271,6 +272,7 @@ static void close(struct intr_frame *f)
     file_deny_write(of->file);
     file_close(of->file);
     list_remove(&of->fd_elem);
+    free(of);
   }
   lock_release(&file_lock);
 }
