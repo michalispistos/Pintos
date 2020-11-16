@@ -298,7 +298,6 @@ tid_t thread_create(const char *name, int priority,
 
 #ifdef USERPROG
   t->parent_tid = thread_current()->tid;
-  t->is_parent_waiting = false;
   list_init(&t->children_info);
   list_init(&t->open_files);
 #endif
