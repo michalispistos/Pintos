@@ -276,18 +276,18 @@ void lock_acquire(struct lock *lock)
   {
     /* If lock is being held by another thread, the current thread is added
     to the blocked_threads list of the lock holder, and priority is donated if needed. */
+    enum intr_level old_level;
+    old_level = intr_disable();
     if (lock->semaphore.value == 0)
     {
-      enum intr_level old_level;
-      old_level = intr_disable();
       thread_current()->priority_receiver = lock->holder;
       list_push_back(&lock->holder->blocked_threads, &thread_current()->blocked_elem);
       if (lock->holder->effective_priority < thread_current()->effective_priority)
       {
         change_priority(lock->holder, thread_current()->effective_priority);
       }
-      intr_set_level(old_level); 
     }
+    intr_set_level(old_level);
   }
 
   sema_down(&lock->semaphore);
@@ -327,7 +327,6 @@ void lock_release(struct lock *lock)
   lock->holder = NULL;
 
   sema_up(&lock->semaphore);
-
 }
 
 /* Returns true if the current thread holds LOCK, false
