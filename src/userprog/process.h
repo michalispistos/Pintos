@@ -13,6 +13,7 @@ struct thread_info
     bool exited_normally;        /* True if exit() was called on it. */
     struct thread *self;         /* A pointer to a thread with id tid. */
     struct lock lock;            /* A lock to prevent child from dying during process wait */
+    bool load_failed;
     struct semaphore wait_sema;
 };
 
