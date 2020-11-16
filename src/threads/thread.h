@@ -116,7 +116,7 @@ struct thread
    struct thread_info *thread_info; /* Pointer to info struct about this thread. */
    struct list open_files;          /* A list of all files open by the thread. */
    struct file *executable;         /* A file pointer to the executable it might be running. */
-   struct semaphore sema_child;
+   struct semaphore load_sema;
 #endif
 
    /* Owned by thread.c. */
