@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "syscall.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
@@ -45,6 +46,7 @@ tid_t process_execute(const char *file_name)
   char **args = palloc_get_page(PAL_ZERO);
   if (!args)
   {
+    palloc_free_page(fn_copy);
     return TID_ERROR;
   }
 
@@ -57,38 +59,44 @@ tid_t process_execute(const char *file_name)
     ++i;
   }
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(args[0], PRI_DEFAULT, start_process, args);
-  if (tid == TID_ERROR)
-  {
-    palloc_free_page(args);
-  }
-
-  /* Setting up and initializing thread_info struct for child. */
-  struct thread_info *child_info = palloc_get_page(PAL_ZERO);
+  /* Allocate memory to third party structure needed in process wait */
+  struct thread_info *child_info = malloc(sizeof(struct thread_info));
   if (child_info == NULL)
   {
+    palloc_free_page(fn_copy);
+    palloc_free_page(args);
     return TID_ERROR;
   }
-  child_info->tid = tid;
   child_info->has_been_waited_on = false;
   child_info->exited_normally = false;
   child_info->load_failed = false;
-  lock_init(&child_info->lock);
   sema_init(&child_info->wait_sema, 0);
   sema_init(&child_info->load_sema, 0);
-
-  struct thread *child = get_thread_from_tid(tid);
+  lock_init(&child_info->lock);
+  child_info->args = args;
   lock_acquire(&child_info->lock);
   list_push_front(&thread_current()->children_info, &child_info->child_elem);
   lock_release(&child_info->lock);
-  child->thread_info = child_info;
-  child_info->self = child;
 
+  /* Create a new thread to execute FILE_NAME. */
+  tid = thread_create(args[0], PRI_DEFAULT, start_process, child_info);
+  if (tid == TID_ERROR)
+  {
+    palloc_free_page(fn_copy);
+    palloc_free_page(args);
+    list_remove(&child_info->child_elem);
+    free(child_info);
+    return TID_ERROR;
+  }
+  child_info->tid = tid;
   /* Blocking parent thread while waiting for child to load. */
   sema_down(&child_info->load_sema);
   if (child_info->load_failed)
   {
+    list_remove(&child_info->child_elem);
+    free(child_info);
+    palloc_free_page(fn_copy);
+    palloc_free_page(args);
     return TID_ERROR;
   }
   return tid;
@@ -99,7 +107,7 @@ tid_t process_execute(const char *file_name)
 static void
 start_process(void *file_name_)
 {
-  char **file_name = file_name_;
+  char **file_name = ((struct thread_info *)file_name_)->args;
   struct intr_frame if_;
   bool success;
 
@@ -285,7 +293,7 @@ void process_exit(void)
     {
       struct list_elem *temp = list_next(e);
       list_remove(e);
-      palloc_free_page(list_entry(e, struct open_file, fd_elem));
+      free(list_entry(e, struct open_file, fd_elem));
       e = temp;
     }
 
@@ -295,10 +303,9 @@ void process_exit(void)
     {
       struct list_elem *temp = list_next(e);
       list_remove(e);
-      palloc_free_page(list_entry(e, struct thread_info, child_elem));
+      free(list_entry(e, struct thread_info, child_elem));
       e = temp;
     }
-
     pagedir_destroy(pd);
   }
 }
