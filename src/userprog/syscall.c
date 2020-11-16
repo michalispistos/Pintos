@@ -14,7 +14,6 @@
 #include "devices/shutdown.h"
 #include "lib/string.h"
 #include "devices/input.h"
-#include "lib/user/syscall.h"
 
 /* The maximum size for a single buffer to be written to the console. */
 #define MAX_SINGLE_BUFFER_SIZE (256)
@@ -27,6 +26,8 @@ static int fd = 2;
 
 static void syscall_handler(struct intr_frame *);
 
+void exit(int status);
+
 /* Verifies a given memory address. */
 static bool verify_memory_address(void **user_pointer)
 {
@@ -37,6 +38,7 @@ static bool verify_memory_address(void **user_pointer)
   }
   return true;
 }
+
 /* Tries to retrieve an open file with file descriptor fd. Returns a pointer to
    struct open_file if found and NULL if it fails. */
 static struct open_file *find_file_from_fd(int fd)
@@ -61,7 +63,7 @@ void syscall_init(void)
 }
 
 /* Terminates Pintos by calling shutdown_power_off(). */
-void halt(void)
+static void halt(struct intr_frame *f UNUSED)
 {
   shutdown_power_off();
 }
@@ -80,8 +82,10 @@ void exit(int status)
 /* Runs the executable whose name is given in cmd line, passing any given arguments, 
   and returns the new process’s program id (pid). Must return pid -1, which otherwise
   should not be a valid pid, if the program cannot load or run for any reason. */
-pid_t exec(const char *cmd_line)
+static pid_t exec(struct intr_frame *f)
 {
+
+  const char *cmd_line = *(char **)(f->esp + 4);
   verify_memory_address((void *)cmd_line);
   lock_acquire(&file_lock);
   pid_t pid = process_execute(cmd_line);
@@ -90,15 +94,20 @@ pid_t exec(const char *cmd_line)
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
-int wait(pid_t pid)
+static int wait(struct intr_frame *f)
 {
+  pid_t pid = *(pid_t *)(f->esp + 4);
   return process_wait(pid);
 }
 
 /* Creates a new file called file initially initial size bytes in size. Returns true 
    if successful, false otherwise. */
-bool create(const char *file, unsigned initial_size)
+static bool create(struct intr_frame *f)
 {
+  //verify_memory_address(f->esp + 4);
+  //verify_memory_address(f->esp + 8);
+  const char *file = *(const char **)(f->esp + 4);
+  unsigned initial_size = *(unsigned *)(f->esp + 8);
   verify_memory_address((void *)file);
   lock_acquire(&file_lock);
   bool result = filesys_create(file, initial_size);
@@ -109,8 +118,9 @@ bool create(const char *file, unsigned initial_size)
 /* Deletes the file called file. Returns true if successful, false otherwise. A file 
   may be removed regardless of whether it is open or closed, and removing an open 
   file does not close it. */
-bool remove(const char *file)
+static bool remove(struct intr_frame *f)
 {
+  const char *file = *(char **)(f->esp + 4);
   verify_memory_address((void *)file);
   lock_acquire(&file_lock);
   bool result = filesys_remove(file);
@@ -120,8 +130,9 @@ bool remove(const char *file)
 
 /* Opens the file called file. Returns a nonnegative integer handle called a “file
  descriptor” (fd), or -1 if the file could not be opened. */
-int open(const char *file)
+static int open(struct intr_frame *f)
 {
+  const char *file = *(char **)(f->esp + 4);
   verify_memory_address((void *)file);
   lock_acquire(&file_lock);
   struct file *file_to_open = filesys_open(file);
@@ -144,8 +155,9 @@ int open(const char *file)
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
-int filesize(int fd)
+static int filesize(struct intr_frame *f)
 {
+  int fd = *(int *)(f->esp + 4);
   lock_acquire(&file_lock);
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
@@ -159,8 +171,11 @@ int filesize(int fd)
 
 /* Reads size bytes from the file open as fd into buffer. Returns the number of bytes actually
   read (0 at end of file), or -1 if the file could not be read. */
-int read(int fd, void *buffer, unsigned size)
+static int read(struct intr_frame *f)
 {
+  int fd = *(int *)(f->esp + 4);
+  void *buffer = *(void **)(f->esp + 8);
+  unsigned size = *(unsigned *)(f->esp + 12);
   verify_memory_address(buffer);
   lock_acquire(&file_lock);
   if (fd == STDIN_FILENO)
@@ -185,8 +200,11 @@ int read(int fd, void *buffer, unsigned size)
 
 /* Writes size bytes from buffer to the open file fd. Returns the number of bytes actually
    written, which may be less than size if some bytes could not be written. */
-int write(int fd, const void *buffer, unsigned size)
+static int write(struct intr_frame *f)
 {
+  int fd = *(int *)(f->esp + 4);
+  const void *buffer = *(const void **)(f->esp + 8);
+  unsigned size = *(unsigned *)(f->esp + 12);
   verify_memory_address((void *)buffer);
   lock_acquire(&file_lock);
   if (fd == STDOUT_FILENO)
@@ -213,8 +231,10 @@ int write(int fd, const void *buffer, unsigned size)
 
 /* Changes the next byte to be read or written in open file fd to position, expressed in bytes
   from the beginning of the file. */
-void seek(int fd, unsigned position)
+static void seek(struct intr_frame *f)
 {
+  int fd = *(int *)(f->esp + 4);
+  unsigned position = *(unsigned *)(f->esp + 8);
   lock_acquire(&file_lock);
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
@@ -226,8 +246,9 @@ void seek(int fd, unsigned position)
 
 /* Returns the position of the next byte to be read or written in open file fd, expressed in bytes
    from the beginning of the file. */
-unsigned tell(int fd)
+static unsigned tell(struct intr_frame *f)
 {
+  int fd = *(int *)(f->esp + 4);
   lock_acquire(&file_lock);
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
@@ -240,8 +261,9 @@ unsigned tell(int fd)
 }
 
 /* Closes file descriptor fd. */
-void close(int fd)
+static void close(struct intr_frame *f)
 {
+  int fd = *(int *)(f->esp + 4);
   lock_acquire(&file_lock);
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
@@ -253,6 +275,23 @@ void close(int fd)
   lock_release(&file_lock);
 }
 
+typedef void *syscall(struct intr_frame *f);
+
+static syscall *syscalls[13] = {
+    (void *)halt,
+    (void *)exit,
+    (void *)exec,
+    (void *)wait,
+    (void *)create,
+    (void *)remove,
+    (void *)open,
+    (void *)filesize,
+    (void *)read,
+    (void *)write,
+    (void *)seek,
+    (void *)tell,
+    (void *)close};
+
 /* Retrieve the system call number, then any system call arguments, 
   and carry out appropriate actions */
 static void
@@ -260,64 +299,18 @@ syscall_handler(struct intr_frame *f)
 {
   verify_memory_address(f->esp);
   int syscall_num = *(int *)(f->esp);
-  switch (syscall_num)
+  int counter = 4;
+  while (counter <= 12 && *(void **)(f->esp + counter) != NULL)
   {
-  case SYS_HALT:
-    halt();
-    break;
-  case SYS_EXIT:
-    verify_memory_address(f->esp + 4);
+    verify_memory_address(f->esp + counter);
+    counter += 4;
+  }
+  if (syscall_num == SYS_EXIT)
+  {
     exit(*(int *)(f->esp + 4));
-    break;
-  case SYS_EXEC:
-    verify_memory_address(f->esp + 4);
-    f->eax = exec(*(const char **)(f->esp + 4));
-    break;
-  case SYS_WAIT:
-    verify_memory_address(f->esp + 4);
-    f->eax = wait(*(int *)(f->esp + 4));
-    break;
-  case SYS_CREATE:
-    verify_memory_address(f->esp + 4);
-    verify_memory_address(f->esp + 8);
-    f->eax = create(*(const char **)(f->esp + 4), *(unsigned int *)(f->esp + 8));
-    break;
-  case SYS_REMOVE:
-    verify_memory_address(f->esp + 4);
-    f->eax = remove(*(const char **)(f->esp + 4));
-    break;
-  case SYS_OPEN:
-    verify_memory_address(f->esp + 4);
-    f->eax = open(*(const char **)(f->esp + 4));
-    break;
-  case SYS_FILESIZE:
-    verify_memory_address(f->esp + 4);
-    f->eax = filesize(*(int *)(f->esp + 4));
-    break;
-  case SYS_READ:
-    verify_memory_address(f->esp + 4);
-    verify_memory_address(f->esp + 8);
-    verify_memory_address(f->esp + 12);
-    f->eax = read(*(int *)(f->esp + 4), *(void **)(f->esp + 8), *(unsigned int *)(f->esp + 12));
-    break;
-  case SYS_WRITE:
-    verify_memory_address(f->esp + 4);
-    verify_memory_address(f->esp + 8);
-    verify_memory_address(f->esp + 12);
-    f->eax = write(*(int *)(f->esp + 4), *(void **)(f->esp + 8), *(unsigned int *)(f->esp + 12));
-    break;
-  case SYS_SEEK:
-    verify_memory_address(f->esp + 4);
-    verify_memory_address(f->esp + 8);
-    seek(*(int *)(f->esp + 4), *(unsigned int *)(f->esp + 8));
-    break;
-  case SYS_TELL:
-    verify_memory_address(f->esp + 4);
-    tell(*(int *)(f->esp + 4));
-    break;
-  case SYS_CLOSE:
-    verify_memory_address(f->esp + 4);
-    close(*(int *)(f->esp + 4));
-    break;
+  }
+  else
+  {
+    f->eax = (uint32_t)syscalls[syscall_num](f);
   }
 }
