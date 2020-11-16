@@ -36,7 +36,6 @@ tid_t process_execute(const char *file_name)
   fn_copy = palloc_get_page(PAL_ZERO);
   if (fn_copy == NULL)
   {
-    //printf("fncopy palloc failed\n");
     return TID_ERROR;
   }
 
@@ -48,6 +47,8 @@ tid_t process_execute(const char *file_name)
   {
     return TID_ERROR;
   }
+
+  // Tokenize and add each word into array
   int i = 0;
   for (token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
        token = strtok_r(NULL, " ", &save_ptr))
@@ -63,14 +64,12 @@ tid_t process_execute(const char *file_name)
     palloc_free_page(args);
   }
 
+  /* Setting up thread_info struct for child. */
   struct thread_info *child_info = palloc_get_page(PAL_ZERO);
-
   if (child_info == NULL)
   {
     return TID_ERROR;
   }
-
-  /* Creating a child_thread_info struct for the child */
 
   child_info->tid = tid;
   child_info->has_been_waited_on = false;
@@ -78,6 +77,7 @@ tid_t process_execute(const char *file_name)
   child_info->load_failed = false;
   lock_init(&child_info->lock);
   sema_init(&child_info->wait_sema, 0);
+  sema_init(&child_info->load_sema, 0);
 
   struct thread *child = get_thread_from_tid(tid);
   struct thread *parent = get_thread_from_tid(child->parent_tid);
@@ -87,10 +87,8 @@ tid_t process_execute(const char *file_name)
   child->thread_info = child_info;
   child_info->self = child;
 
-  //sema_down(&child->sema);
-  //sema_down(&child_info->sema);
-  sema_init(&thread_current()->load_sema, 0);
-  sema_down(&thread_current()->load_sema);
+  /* Blocking parent thread while waiting for child to load. */
+  sema_down(&child_info->load_sema);
   if (child_info->load_failed)
   {
     return TID_ERROR;
@@ -104,9 +102,7 @@ tid_t process_execute(const char *file_name)
 static void
 start_process(void *file_name_)
 {
-  //sema_up(&thread_current()->thread_info->sema);
   char **file_name = file_name_;
-
   struct intr_frame if_;
   bool success;
 
@@ -115,49 +111,37 @@ start_process(void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  //lock_acquire(&file_lock);
   success = load(file_name[0], &if_.eip, &if_.esp);
+  /* Unblocking parent thread after loading. */
+  sema_up(&thread_current()->thread_info->load_sema);
 
+  /* If load failed, quit. */
   if (!success)
+  {
     thread_exit();
-  //lock_release(&file_lock);
-  //sema_up(&thread_current()->thread_info->sema);
-  /*
-i Push the arguments onto the stack, one by one, in reverse order
-ii Push a null pointer sentinel (0)
-iii Push pointers to the arguments (again in reverse)
-iv Push a pointer to the first pointer
-v Push the number of arguments
-vi Push a fake return address (0)
-*/
-  /*Seting up the stack*/
+  }
 
-  // Counting the number of arguments
+  /* Setting up the stack. */
+
+  /* Counting the number of arguments. */
   int argc = 0;
   while (file_name[argc] != NULL)
   {
     argc++;
   }
 
-  // Decrement by 4 as it is initially pointing to PHYS_BASE
-  //if_.esp -= 4;
-  //if_.esp -= strlen(file_name[argc - 1]) + 1;
-
-  // Adding arguments onto the stack, in reverse order
+  /* Adding arguments onto the stack, in reverse order. */
   int total_length = 0;
   for (int i = argc - 1; i >= 0; --i)
   {
-    // +1 due to \0 at the end of each string
+    /* +1 due to \0 at the end of each string. */
     size_t string_length = strlen(file_name[i]) + 1;
     total_length += string_length;
     if_.esp -= string_length;
-    //*(char **)if_.esp = file_name[i];
-    //printf("filename in startprocess: %s\n", file_name[i]);
     strlcpy(if_.esp, file_name[i], string_length);
-    //printf("argv[%d]: %s(%p)\n", i, *(char **)(if_.esp), if_.esp);
   }
 
-  //Word align
+  /* Word aligning. */
   int word_align_length = 4 - (total_length % 4);
   if (word_align_length == 4)
   {
@@ -168,58 +152,36 @@ vi Push a fake return address (0)
     if_.esp -= word_align_length;
     *(uint8_t *)if_.esp = 0;
   }
-  //printf("Word align size: %d(%p)\n", word_align_length, if_.esp);
 
-  // Null pointer sentinel (0)
+  /* Null pointer sentinel (0). */
   if_.esp -= 4;
   *(char **)if_.esp = 0;
-  // printf("Null pointer sentinel: %s(Address: %p)\n", *(char **)if_.esp, if_.esp);
   if_.esp -= 4;
 
-  // Push pointers to the arguments in reverse order
+  /* Push pointers to the arguments in reverse order. */
   for (int i = argc - 1; i >= 0; --i)
   {
     int counter = word_align_length + 4 + 4 * (argc - i);
     for (int j = 0; j < i; j++)
     {
-      //printf("2 %s", file_name[j]);
       counter += strlen(file_name[j]) + 1;
     }
-    *(char ***)if_.esp = if_.esp + counter;
-    // printf("Pointer of argv[%d]: %p(Address: %p)\n", i, *(char **)(if_.esp), if_.esp);
+    *(char **)if_.esp = if_.esp + counter;
     if_.esp -= 4;
   }
-  // Pointer to the first pointer
-  *(char ****)if_.esp = if_.esp + 4;
-  //printf("Pointer to the first pointer (address above this): %p (%p)\n", *(char ***)(if_.esp), if_.esp);
+
+  /* Pointer to the pointer of the first argument. */
+  *(char ***)if_.esp = if_.esp + 4;
   if_.esp -= 4;
 
-  // Push number of arguments
+  /* Push number of arguments. */
   *(int *)if_.esp = argc;
-  // printf("Number of arguments(argc): %d(%p)\n", *(int *)(if_.esp), if_.esp);
 
-  // Pushing fake address
-  if_.esp = if_.esp - 4;
+  /* Pushing fake address. */
+  if_.esp -= 4;
   *(void **)if_.esp = 0;
-  //printf("Fake address: %p\n", (if_.esp));
-  // printf("Stack start:\n");
-
-  //printf("%d\n", *(int *)(if_.esp + 4));
-  //printf("%p\n", *(char ****)(if_.esp + 8));
-  //printf("%p\n", *(char ***)(if_.esp + 12));
-  //printf("%s\n", *(char **)(if_.esp + 16));
-  //printf("%s\n", *(char **)(if_.esp + 20));
-  //printf("StartEnd\n");
-  // printf("%d \n", PHYS_BASE - if_.esp);
-
-  //hex_dump(0, if_.esp, PHYS_BASE - if_.esp, 1);
-
-  /* If load failed, quit. */
-  //sema_up(&thread_current()->thread_info->sema);
 
   palloc_free_page(file_name);
-  if (!success)
-    thread_exit();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -239,30 +201,23 @@ vi Push a fake return address (0)
  * returns -1.  
  * If TID is invalid or if it was not a child of the calling process, or if 
  * process_wait() has already been successfully called for the given TID, 
- * returns -1 immediately, without waiting.
- * 
- * This function will be implemented in task 2.
- * For now, it does nothing. */
+ * returns -1 immediately, without waiting. */
 int process_wait(tid_t child_tid)
 {
-  //printf("started wait\n");
-
   bool child_found = false;
   struct thread_info *child_info;
   struct list_elem *e;
 
-  /* Finds the struct child info corresponding to the child_tid */
+  /* Finds the struct child info corresponding to the child_tid if it exists. */
   for (e = list_begin(&thread_current()->children_info); e != list_end(&thread_current()->children_info); e = list_next(e))
   {
     child_info = list_entry(e, struct thread_info, child_elem);
-
     /* This is the case where the given tid belongs to a child thread. */
     if (child_info->tid == child_tid)
     {
       child_found = true;
       if (child_info->has_been_waited_on)
       {
-        //printf("wait finished early, has been waited on\n");
         return -1;
       }
       break;
@@ -272,43 +227,26 @@ int process_wait(tid_t child_tid)
   /* This is the case where the tid is invalid or not a child thread. */
   if (!child_found)
   {
-    //printf("wait finished early, child not found\n");
     return -1;
   }
 
-  //sema_init(&thread_current()->sema, 0);
   child_info->has_been_waited_on = true;
 
   /* It is a child that has been terminated. */
-  //lock_acquire(&child_info->lock);
-  //sema_init(&child_info->wait_sema, 0);
-  child_info->self->is_parent_waiting = true;
-
   if (child_info->self == NULL)
   {
     if (child_info->exited_normally)
     {
-      //lock_release(&child_info->lock);
-      //printf("wait exited normally, child already teriminated, return exit code\n");
       return child_info->exit_code;
     }
-    //lock_release(&child_info->lock);
-    //printf("wait terminated early, child terminated and did not exit normally\n");
     return -1;
   }
 
-  //Successful
-  //Will be up-ed by waiting child
-  //child_info->self->is_parent_waiting = true;
-  // lock_release(&child_info->lock);
-
-  //sema_down(&thread_current()->sema);
-  // printf("SEMA DOWNED\n");
+  /* Child is still alive. */
+  /* Will be up-ed by waiting child. */
   sema_down(&child_info->wait_sema);
-  // printf("REACHED AFTER SEMA DOWN\n");
   if (child_info->exited_normally)
   {
-    //printf("wait successful, return exit code: %d\n", child_info->exit_code);
     return child_info->exit_code;
   }
   return -1;
@@ -335,25 +273,16 @@ void process_exit(void)
          that's been freed (and cleared). */
     cur->pagedir = NULL;
     pagedir_activate(NULL);
-    //lock_acquire(&cur->thread_info->lock);
-    //lock_release(&cur->thread_info->lock);
+
+    /* Close the file when the executable terminates. */
     file_close(cur->executable);
 
-    /*
-    if (cur->is_parent_waiting)
-    {
-      struct thread *parent = get_thread_from_tid(cur->parent_tid);
-      if (parent)
-      {
-        sema_up(&parent->sema);
-      }
-    }
-    */
+    /* Upping the semaphore in order to unblock the parent
+       waiting on the child to terminate. */
     sema_up(&cur->thread_info->wait_sema);
-    //printf("CHILD INFO SEMA UPED");
 
+    /* Freeing open files list. */
     struct list_elem *e;
-    /* Freeing open files list*/
     e = list_begin(&cur->open_files);
     while (e != list_end(&cur->open_files))
     {
@@ -363,7 +292,7 @@ void process_exit(void)
       e = temp;
     }
 
-    /* Freeing children list*/
+    /* Freeing children list. */
     e = list_begin(&cur->children_info);
     while (e != list_end(&cur->children_info))
     {
@@ -486,8 +415,8 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   if (file == NULL)
   {
     printf("load: %s: open failed\n", file_name);
+    /* If load fails set load_failed to true. */
     t->thread_info->load_failed = true;
-    sema_up(&get_thread_from_tid(thread_current()->parent_tid)->load_sema);
     goto done;
   }
 
@@ -495,12 +424,10 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024)
   {
     printf("load: %s: error loading executable\n", file_name);
-    sema_up(&get_thread_from_tid(thread_current()->parent_tid)->load_sema);
+    /* If load fails set load_failed to true. */
+    t->thread_info->load_failed = true;
     goto done;
   }
-
-  sema_up(&get_thread_from_tid(thread_current()->parent_tid)->load_sema);
-  //sema_up(&thread_current()->thread_info->sema);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -568,16 +495,13 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   *eip = (void (*)(void))ehdr.e_entry;
 
   success = true;
+  /* Denying writes as long as the executable is running. */
   file_deny_write(file);
-  //file_close(file);
+  /* Set the thread's executable to file*/
   t->executable = file;
 
 done:
-  /* We arrive here whether the load is successful or not. */
-  //printf("above sema up\n");
-  //sema_up(&t->sema);
-  //sema_up(&t->thread_info->sema);
-  //sema_up(&thread_current()->thread_info->sema);
+  /* Arrives here whether load is successful or not. */
   return success;
 }
 
