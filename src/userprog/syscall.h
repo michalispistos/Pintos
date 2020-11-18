@@ -12,6 +12,7 @@ typedef void *syscall(struct intr_frame *f);
 
 void exit(int);
 void syscall_init(void);
+void verify_memory_address(void **user_pointer);
 
 struct open_file
 {

@@ -27,14 +27,14 @@ static void syscall_handler(struct intr_frame *);
 void exit(int status);
 
 /* Verifies a given memory address. */
-static bool verify_memory_address(void **user_pointer)
+void verify_memory_address(void **user_pointer)
 {
   if (!user_pointer || !is_user_vaddr(user_pointer) || pagedir_get_page(thread_current()->pagedir, user_pointer) == NULL)
   {
     exit(-1);
-    return false;
+    // return false;
   }
-  return true;
+  // return true;
 }
 
 /* Tries to retrieve an open file with file descriptor fd. Returns a pointer to
@@ -146,7 +146,7 @@ static int open(struct intr_frame *f)
   if (of == NULL)
   {
     lock_release(&file_lock);
-    return TID_ERROR;
+    return -1;
   }
 
   if (thread_current()->fd == INT32_MAX)
@@ -186,6 +186,7 @@ static int read(struct intr_frame *f)
   void *buffer = *(void **)(f->esp + 8);
   unsigned size = *(unsigned *)(f->esp + 12);
   verify_memory_address(buffer);
+  verify_memory_address(buffer + size);
   lock_acquire(&file_lock);
 
   if (fd == STDIN_FILENO)
@@ -219,6 +220,7 @@ static int write(struct intr_frame *f)
   const void *buffer = *(const void **)(f->esp + 8);
   unsigned size = *(unsigned *)(f->esp + 12);
   verify_memory_address((void *)buffer);
+  verify_memory_address((void *)buffer + size);
   lock_acquire(&file_lock);
 
   if (fd == STDOUT_FILENO)
