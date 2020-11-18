@@ -23,7 +23,7 @@
 static struct lock file_lock;
 
 /* File descriptor for open. */
-static int fd = 2;
+static int fds[100000];
 
 static void syscall_handler(struct intr_frame *);
 
@@ -137,6 +137,7 @@ static int open(struct intr_frame *f)
   verify_memory_address((void *)file);
   lock_acquire(&file_lock);
   struct file *file_to_open = filesys_open(file);
+
   if (file_to_open == NULL)
   {
     lock_release(&file_lock);
@@ -148,7 +149,20 @@ static int open(struct intr_frame *f)
     lock_release(&file_lock);
     return TID_ERROR;
   }
-  of->fd = fd++;
+  int fd = 2;
+  while (fd < 100002 && fds[fd - 2])
+  {
+    fd++;
+  }
+
+  if (fd > 100001)
+  {
+    lock_release(&file_lock);
+    return -1;
+  }
+
+  fds[fd - 2] = 1;
+  of->fd = fd;
   of->file = file_to_open;
   list_push_front(&thread_current()->open_files, &of->fd_elem);
   lock_release(&file_lock);
@@ -207,9 +221,9 @@ static int write(struct intr_frame *f)
   const void *buffer = *(const void **)(f->esp + 8);
   unsigned size = *(unsigned *)(f->esp + 12);
   verify_memory_address((void *)buffer);
-  lock_acquire(&file_lock);
   if (fd == STDOUT_FILENO)
   {
+    lock_acquire(&file_lock);
     unsigned temp_size = size;
     while (temp_size >= MAX_SINGLE_BUFFER_SIZE)
     {
@@ -223,10 +237,10 @@ static int write(struct intr_frame *f)
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
   {
-    lock_release(&file_lock);
+    // lock_release(&file_lock);
     return file_write(of->file, buffer, size);
   }
-  lock_release(&file_lock);
+  // lock_release(&file_lock);
   return 0;
 }
 
@@ -269,6 +283,7 @@ static void close(struct intr_frame *f)
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
   {
+    fds[of->fd - 2] = 0;
     file_deny_write(of->file);
     file_close(of->file);
     list_remove(&of->fd_elem);
@@ -277,8 +292,10 @@ static void close(struct intr_frame *f)
   lock_release(&file_lock);
 }
 
+/* Typedef for syscall function pointers. */
 typedef void *syscall(struct intr_frame *f);
 
+/* Array of function pointers to syscalls*/
 static syscall *syscalls[13] = {
     (void *)halt,
     (void *)exit,
@@ -296,8 +313,7 @@ static syscall *syscalls[13] = {
 
 /* Retrieve the system call number, then any system call arguments, 
   and carry out appropriate actions */
-static void
-syscall_handler(struct intr_frame *f)
+static void syscall_handler(struct intr_frame *f)
 {
   verify_memory_address(f->esp);
   int syscall_num = *(int *)(f->esp);
