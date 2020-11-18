@@ -28,6 +28,7 @@ void exit(int status);
 
 /* Verifies a given memory address. */
 static bool verify_memory_address(void **user_pointer)
+
 {
   if (!user_pointer || !is_user_vaddr(user_pointer) || pagedir_get_page(thread_current()->pagedir, user_pointer) == NULL)
   {
@@ -211,9 +212,10 @@ static int write(struct intr_frame *f)
   const void *buffer = *(const void **)(f->esp + 8);
   unsigned size = *(unsigned *)(f->esp + 12);
   verify_memory_address((void *)buffer);
+  lock_acquire(&file_lock);
+
   if (fd == STDOUT_FILENO)
   {
-    lock_acquire(&file_lock);
     unsigned temp_size = size;
     while (temp_size >= MAX_SINGLE_BUFFER_SIZE)
     {
@@ -227,10 +229,10 @@ static int write(struct intr_frame *f)
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
   {
-    // lock_release(&file_lock);
+    lock_release(&file_lock);
     return file_write(of->file, buffer, size);
   }
-  // lock_release(&file_lock);
+  lock_release(&file_lock);
   return 0;
 }
 
