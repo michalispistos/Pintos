@@ -141,6 +141,7 @@ start_process(void *file_name_)
     /* +1 due to \0 at the end of each string. */
     size_t string_length = strlen(file_name[i]) + 1;
     total_length += string_length;
+    verify_memory_address(if_.esp - string_length);
     if_.esp -= string_length;
     strlcpy(if_.esp, file_name[i], string_length);
   }
@@ -153,13 +154,16 @@ start_process(void *file_name_)
   }
   else
   {
+    verify_memory_address(if_.esp - word_align_length);
     if_.esp -= word_align_length;
     *(uint8_t *)if_.esp = 0;
   }
 
   /* Null pointer sentinel (0). */
+  verify_memory_address(if_.esp - 4);
   if_.esp -= 4;
   *(char **)if_.esp = 0;
+  verify_memory_address(if_.esp - 4);
   if_.esp -= 4;
 
   /* Push pointers to the arguments in reverse order. */
@@ -171,17 +175,20 @@ start_process(void *file_name_)
       counter += strlen(file_name[j]) + 1;
     }
     *(char **)if_.esp = if_.esp + counter;
+    verify_memory_address(if_.esp - 4);
     if_.esp -= 4;
   }
 
   /* Pointer to the pointer of the first argument. */
   *(char ***)if_.esp = if_.esp + 4;
+  verify_memory_address(if_.esp - 4);
   if_.esp -= 4;
 
   /* Push number of arguments. */
   *(int *)if_.esp = argc;
 
   /* Pushing fake address. */
+  verify_memory_address(if_.esp - 4);
   if_.esp -= 4;
   *(void **)if_.esp = 0;
 
@@ -631,9 +638,7 @@ setup_stack(void **esp)
   {
     success = install_page(((uint8_t *)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
-      //CHANGED
       *esp = PHYS_BASE;
-    //
     else
       palloc_free_page(kpage);
   }
