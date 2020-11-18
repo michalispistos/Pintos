@@ -22,9 +22,6 @@
 /* Lock needed to use the filesystem. */
 static struct lock file_lock;
 
-/* File descriptor for open. */
-static int fds[100000];
-
 static void syscall_handler(struct intr_frame *);
 
 void exit(int status);
@@ -149,20 +146,13 @@ static int open(struct intr_frame *f)
     lock_release(&file_lock);
     return TID_ERROR;
   }
-  int fd = 2;
-  while (fd < 100002 && fds[fd - 2])
-  {
-    fd++;
-  }
 
-  if (fd > 100001)
+  if (thread_current()->fd == INT32_MAX)
   {
     lock_release(&file_lock);
     return -1;
   }
-
-  fds[fd - 2] = 1;
-  of->fd = fd;
+  of->fd = thread_current()->fd++;
   of->file = file_to_open;
   list_push_front(&thread_current()->open_files, &of->fd_elem);
   lock_release(&file_lock);
@@ -283,7 +273,6 @@ static void close(struct intr_frame *f)
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
   {
-    fds[of->fd - 2] = 0;
     file_deny_write(of->file);
     file_close(of->file);
     list_remove(&of->fd_elem);

@@ -126,7 +126,6 @@ void thread_init(void)
     load_avg = 0;
     number_of_threads_in_queue_array = 0;
   }
-
 #ifdef USERPROG
   list_init(&initial_thread->children_info);
   list_init(&initial_thread->open_files);
@@ -297,6 +296,7 @@ tid_t thread_create(const char *name, int priority,
   tid = t->tid = allocate_tid();
 
 #ifdef USERPROG
+  t->fd = 2;
   t->parent_tid = thread_current()->tid;
   list_init(&t->children_info);
   list_init(&t->open_files);

@@ -115,6 +115,7 @@ struct thread
    struct thread_info *thread_info; /* Pointer to info struct about this thread. */
    struct list open_files;          /* A list of all files open by the thread. */
    struct file *executable;         /* A file pointer to the executable it might be running. */
+   int fd;                          /* Current available file descriptor. */
 #endif
 
    /* Owned by thread.c. */
