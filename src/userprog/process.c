@@ -34,7 +34,7 @@ tid_t process_execute(const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page(PAL_ZERO);
+  fn_copy = palloc_get_page(0);
   if (fn_copy == NULL)
   {
     return TID_ERROR;
@@ -64,7 +64,7 @@ tid_t process_execute(const char *file_name)
   if (child_info == NULL)
   {
     palloc_free_page(fn_copy);
-    palloc_free_page(args);
+    free(args);
     return TID_ERROR;
   }
   child_info->has_been_waited_on = false;
@@ -117,6 +117,7 @@ start_process(void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load(file_name[0], &if_.eip, &if_.esp);
+  thread_current()->thread_info->load_failed = !success;
   /* Unblocking parent thread after loading. */
   sema_up(&thread_current()->thread_info->load_sema);
 
@@ -186,6 +187,7 @@ start_process(void *file_name_)
   if_.esp -= 4;
   *(void **)if_.esp = 0;
 
+  palloc_free_page(file_name[0]);
   palloc_free_page(file_name);
 
   /* Start the user process by simulating a return from an
@@ -221,6 +223,7 @@ int process_wait(tid_t child_tid)
     if (child_info->tid == child_tid)
     {
       child_found = true;
+      /* If process_wait has already been called on this child, we return -1. */
       if (child_info->has_been_waited_on)
       {
         return -1;
@@ -237,18 +240,10 @@ int process_wait(tid_t child_tid)
 
   child_info->has_been_waited_on = true;
 
-  /* It is a child that has been terminated. */
-  if (child_info->self == NULL)
-  {
-    if (child_info->exited_normally)
-    {
-      return child_info->exit_code;
-    }
-    return -1;
-  }
-
-  /* Child is still alive. */
-  /* Will be up-ed by waiting child. */
+  /* If child is still alive - Wait until child finishes and dies. 
+     This semaphore will be up-ed by waiting child. 
+     If dead the semaphore value will be 1,
+     so the parent process won't get blocked. */
   sema_down(&child_info->wait_sema);
   if (child_info->exited_normally)
   {
@@ -282,8 +277,9 @@ void process_exit(void)
     /* Close the file when the executable terminates. */
     file_close(cur->executable);
 
-    /* Upping the semaphore in order to unblock the parent
-       waiting on the child to terminate. */
+    /* Up-ing the semaphore in order to unblock the parent
+       waiting on the child to terminate. 
+       This doesn't matter if it's been waited on. */
     sema_up(&cur->thread_info->wait_sema);
 
     /* Freeing open files list. */
@@ -292,8 +288,10 @@ void process_exit(void)
     while (e != list_end(&cur->open_files))
     {
       struct list_elem *temp = list_next(e);
+      struct open_file *of = list_entry(e, struct open_file, fd_elem);
       list_remove(e);
-      free(list_entry(e, struct open_file, fd_elem));
+      file_close(of->file);
+      free(of);
       e = temp;
     }
 
@@ -420,7 +418,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   {
     printf("load: %s: open failed\n", file_name);
     /* If load fails set load_failed to true. */
-    t->thread_info->load_failed = true;
     goto done;
   }
 
@@ -429,7 +426,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   {
     printf("load: %s: error loading executable\n", file_name);
     /* If load fails set load_failed to true. */
-    t->thread_info->load_failed = true;
     goto done;
   }
 
