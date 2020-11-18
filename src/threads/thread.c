@@ -295,19 +295,17 @@ tid_t thread_create(const char *name, int priority,
   init_thread(t, name, priority);
   tid = t->tid = allocate_tid();
 
-#ifdef USERPROG
-  t->fd = 2;
-  t->parent_tid = thread_current()->tid;
-  list_init(&t->children_info);
-  list_init(&t->open_files);
-  t->thread_info = aux;
-  t->thread_info->self = t;
-#endif
-
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
   old_level = intr_disable();
+
+#ifdef USERPROG
+  t->fd = 2;
+  list_init(&t->children_info);
+  list_init(&t->open_files);
+  t->thread_info = aux;
+#endif
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
@@ -845,20 +843,3 @@ static tid_t allocate_tid(void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
-
-/* Searches the list of threads and returns a pointer to
-  the thread with the matching tid. If not found, returns NULL 
-*/
-struct thread *get_thread_from_tid(tid_t tid)
-{
-  struct list_elem *e;
-  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
-  {
-    struct thread *t = list_entry(e, struct thread, allelem);
-    if (t->tid == tid)
-    {
-      return t;
-    }
-  }
-  return NULL;
-}

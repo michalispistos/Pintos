@@ -110,11 +110,10 @@ struct thread
 #ifdef USERPROG
    /* Owned by userprog/process.c. */
    uint32_t *pagedir;               /* Page directory. */
-   tid_t parent_tid;                /* tid of parent thread. */
    struct list children_info;       /* List of struct thread_info for its children (that may be dead). */
    struct thread_info *thread_info; /* Pointer to info struct about this thread. */
    struct list open_files;          /* A list of all files open by the thread. */
-   struct file *executable;         /* A file pointer to the executable it might be running. */
+   struct file *executable;         /* A file pointer to the executable the thread is running. */
    int fd;                          /* Current available file descriptor. */
 #endif
 
@@ -161,6 +160,5 @@ int thread_get_load_avg(void);
 struct thread *highest_priority_thread(struct list *);
 int highest_blocked_thread_priority(struct list *);
 void thread_set_effective_priority(struct thread *, int);
-struct thread *get_thread_from_tid(tid_t);
 
 #endif /* threads/thread.h */

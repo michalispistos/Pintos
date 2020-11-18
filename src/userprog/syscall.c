@@ -28,7 +28,6 @@ void exit(int status);
 
 /* Verifies a given memory address. */
 static bool verify_memory_address(void **user_pointer)
-
 {
   if (!user_pointer || !is_user_vaddr(user_pointer) || pagedir_get_page(thread_current()->pagedir, user_pointer) == NULL)
   {
@@ -71,40 +70,41 @@ static void halt(struct intr_frame *f UNUSED)
 void exit(int status)
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);
-  /* We add the exit code into the thread_info struct. */
+  /* We add the exit code into the thread_info struct and set 
+     exited_normally to true. */
   struct thread_info *info = thread_current()->thread_info;
   info->exited_normally = true;
   info->exit_code = status;
   thread_exit();
 }
 
-/* Runs the executable whose name is given in cmd line, passing any given arguments, 
-  and returns the new process’s program id (pid). Must return pid -1, which otherwise
-  should not be a valid pid, if the program cannot load or run for any reason. */
+/* Runs the executable whose name is given in cmd line (in interrupt frame),
+   passing any given arguments, and returns the new process’s program id (pid). 
+   Must return pid -1, which otherwise should not be a valid pid,
+   if the program cannot load or run for any reason. */
 static pid_t exec(struct intr_frame *f)
 {
-
   const char *cmd_line = *(char **)(f->esp + 4);
   verify_memory_address((void *)cmd_line);
+  /* Need file_lock because load will be called, which uses filesystem. */
   lock_acquire(&file_lock);
   pid_t pid = process_execute(cmd_line);
   lock_release(&file_lock);
   return pid;
 }
 
-/* Waits for a child process pid and retrieves the child’s exit status. */
+/* Waits for a child process pid (in interrupt frame) 
+   and retrieves the child’s exit status. */
 static int wait(struct intr_frame *f)
 {
   pid_t pid = *(pid_t *)(f->esp + 4);
   return process_wait(pid);
 }
 
-/* Creates a new file called file initially initial size bytes in size. Returns true 
-   if successful, false otherwise. */
+/* Creates a new file called file initially initial size bytes in size (all in interrupt frame). 
+   Returns true if successful, false otherwise. */
 static bool create(struct intr_frame *f)
 {
-  //verify_memory_address(f->esp + 4);
-  //verify_memory_address(f->esp + 8);
   const char *file = *(const char **)(f->esp + 4);
   unsigned initial_size = *(unsigned *)(f->esp + 8);
   verify_memory_address((void *)file);
@@ -114,9 +114,9 @@ static bool create(struct intr_frame *f)
   return result;
 }
 
-/* Deletes the file called file. Returns true if successful, false otherwise. A file 
-  may be removed regardless of whether it is open or closed, and removing an open 
-  file does not close it. */
+/* Deletes the file called file (in interrupt frame). Returns true if successful, false otherwise.
+   A file may be removed regardless of whether it is open or closed, and removing an open 
+   file does not close it. */
 static bool remove(struct intr_frame *f)
 {
   const char *file = *(char **)(f->esp + 4);
@@ -127,7 +127,7 @@ static bool remove(struct intr_frame *f)
   return result;
 }
 
-/* Opens the file called file. Returns a nonnegative integer handle called a “file
+/* Opens the file called file (in interrupt frame). Returns a nonnegative integer handle called a “file
  descriptor” (fd), or -1 if the file could not be opened. */
 static int open(struct intr_frame *f)
 {
@@ -141,6 +141,7 @@ static int open(struct intr_frame *f)
     lock_release(&file_lock);
     return -1;
   }
+
   struct open_file *of = malloc(sizeof(struct open_file));
   if (of == NULL)
   {
@@ -153,6 +154,7 @@ static int open(struct intr_frame *f)
     lock_release(&file_lock);
     return -1;
   }
+
   of->fd = thread_current()->fd++;
   of->file = file_to_open;
   list_push_front(&thread_current()->open_files, &of->fd_elem);
@@ -160,7 +162,7 @@ static int open(struct intr_frame *f)
   return of->fd;
 }
 
-/* Returns the size, in bytes, of the file open as fd. */
+/* Returns the size, in bytes, of the file open as fd (in interrupt frame).  */
 static int filesize(struct intr_frame *f)
 {
   int fd = *(int *)(f->esp + 4);
@@ -175,8 +177,9 @@ static int filesize(struct intr_frame *f)
   return -1;
 }
 
-/* Reads size bytes from the file open as fd into buffer. Returns the number of bytes actually
-  read (0 at end of file), or -1 if the file could not be read. */
+/* Reads size bytes from the file open as fd into buffer (all in interrupt frame). 
+   Returns the number of bytes actually read (0 at end of file), 
+   or -1 if the file could not be read. */
 static int read(struct intr_frame *f)
 {
   int fd = *(int *)(f->esp + 4);
@@ -184,6 +187,7 @@ static int read(struct intr_frame *f)
   unsigned size = *(unsigned *)(f->esp + 12);
   verify_memory_address(buffer);
   lock_acquire(&file_lock);
+
   if (fd == STDIN_FILENO)
   {
     char *buffer_ = (char *)buffer;
@@ -194,18 +198,21 @@ static int read(struct intr_frame *f)
     lock_release(&file_lock);
     return size;
   }
+
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
   {
     lock_release(&file_lock);
     return file_read(of->file, buffer, size);
   }
+
   lock_release(&file_lock);
   return -1;
 }
 
-/* Writes size bytes from buffer to the open file fd. Returns the number of bytes actually
-   written, which may be less than size if some bytes could not be written. */
+/* Writes size bytes from buffer to the open file fd (all in interrupt frame). 
+   Returns the number of bytes actually written, which may be less than size 
+   if some bytes could not be written. */
 static int write(struct intr_frame *f)
 {
   int fd = *(int *)(f->esp + 4);
@@ -226,18 +233,20 @@ static int write(struct intr_frame *f)
     lock_release(&file_lock);
     return size;
   }
+
   struct open_file *of = find_file_from_fd(fd);
   if (of != NULL)
   {
     lock_release(&file_lock);
     return file_write(of->file, buffer, size);
   }
+
   lock_release(&file_lock);
   return 0;
 }
 
-/* Changes the next byte to be read or written in open file fd to position, expressed in bytes
-  from the beginning of the file. */
+/* Changes the next byte to be read or written in open file fd to position, 
+   expressed in bytes from the beginning of the file (all in interrupt frame). */
 static void seek(struct intr_frame *f)
 {
   int fd = *(int *)(f->esp + 4);
@@ -251,8 +260,8 @@ static void seek(struct intr_frame *f)
   lock_release(&file_lock);
 }
 
-/* Returns the position of the next byte to be read or written in open file fd, expressed in bytes
-   from the beginning of the file. */
+/* Returns the position of the next byte to be read or written in open file fd, 
+   expressed in bytes from the beginning of the file (in interrupt frame).*/
 static unsigned tell(struct intr_frame *f)
 {
   int fd = *(int *)(f->esp + 4);
@@ -267,7 +276,7 @@ static unsigned tell(struct intr_frame *f)
   return -1;
 }
 
-/* Closes file descriptor fd. */
+/* Closes file descriptor fd (in interrupt frame). */
 static void close(struct intr_frame *f)
 {
   int fd = *(int *)(f->esp + 4);
@@ -282,9 +291,6 @@ static void close(struct intr_frame *f)
   }
   lock_release(&file_lock);
 }
-
-/* Typedef for syscall function pointers. */
-typedef void *syscall(struct intr_frame *f);
 
 /* Array of function pointers to syscalls*/
 static syscall *syscalls[13] = {
@@ -309,13 +315,14 @@ static void syscall_handler(struct intr_frame *f)
   verify_memory_address(f->esp);
   int syscall_num = *(int *)(f->esp);
   int counter = 4;
-  while (counter <= 12 && *(void **)(f->esp + counter) != NULL)
+  while (*(void **)(f->esp + counter) != NULL)
   {
     verify_memory_address(f->esp + counter);
     counter += 4;
   }
   if (syscall_num == SYS_EXIT)
   {
+    /* Exit not included because other functions might call without interrupt frame. */
     exit(*(int *)(f->esp + 4));
   }
   else

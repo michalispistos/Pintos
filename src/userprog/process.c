@@ -41,7 +41,6 @@ tid_t process_execute(const char *file_name)
   }
 
   strlcpy(fn_copy, file_name, PGSIZE);
-
   char *token, *save_ptr;
   char **args = palloc_get_page(PAL_ZERO);
   if (!args)
@@ -59,7 +58,7 @@ tid_t process_execute(const char *file_name)
     ++i;
   }
 
-  /* Allocate memory to third party structure needed in process wait */
+  /* Allocate memory to third party structure needed in process_wait */
   struct thread_info *child_info = malloc(sizeof(struct thread_info));
   if (child_info == NULL)
   {
@@ -72,11 +71,8 @@ tid_t process_execute(const char *file_name)
   child_info->load_failed = false;
   sema_init(&child_info->wait_sema, 0);
   sema_init(&child_info->load_sema, 0);
-  lock_init(&child_info->lock);
   child_info->args = args;
-  lock_acquire(&child_info->lock);
   list_push_front(&thread_current()->children_info, &child_info->child_elem);
-  lock_release(&child_info->lock);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(args[0], PRI_DEFAULT, start_process, child_info);
@@ -89,6 +85,7 @@ tid_t process_execute(const char *file_name)
     return TID_ERROR;
   }
   child_info->tid = tid;
+
   /* Blocking parent thread while waiting for child to load. */
   sema_down(&child_info->load_sema);
   if (child_info->load_failed)
@@ -118,6 +115,7 @@ start_process(void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load(file_name[0], &if_.eip, &if_.esp);
   thread_current()->thread_info->load_failed = !success;
+
   /* Unblocking parent thread after loading. */
   sema_up(&thread_current()->thread_info->load_sema);
 
@@ -127,7 +125,7 @@ start_process(void *file_name_)
     thread_exit();
   }
 
-  /* Setting up the stack. */
+  /* SETTING UP THE STACK */
 
   /* Counting the number of arguments. */
   int argc = 0;
@@ -260,7 +258,6 @@ void process_exit(void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-
   pd = cur->pagedir;
   if (pd != NULL)
   {
@@ -282,7 +279,7 @@ void process_exit(void)
        This doesn't matter if it's been waited on. */
     sema_up(&cur->thread_info->wait_sema);
 
-    /* Freeing open files list. */
+    /* Freeing open_files list and closing the files. */
     struct list_elem *e;
     e = list_begin(&cur->open_files);
     while (e != list_end(&cur->open_files))
@@ -295,7 +292,7 @@ void process_exit(void)
       e = temp;
     }
 
-    /* Freeing children list. */
+    /* Freeing children_info list. */
     e = list_begin(&cur->children_info);
     while (e != list_end(&cur->children_info))
     {
@@ -412,12 +409,10 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   process_activate();
 
   /* Open executable file. */
-  //printf("The filename in load: %s\n", file_name);
   file = filesys_open(file_name);
   if (file == NULL)
   {
     printf("load: %s: open failed\n", file_name);
-    /* If load fails set load_failed to true. */
     goto done;
   }
 
@@ -425,7 +420,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024)
   {
     printf("load: %s: error loading executable\n", file_name);
-    /* If load fails set load_failed to true. */
     goto done;
   }
 
@@ -497,6 +491,7 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
   success = true;
   /* Denying writes as long as the executable is running. */
   file_deny_write(file);
+
   /* Set the thread's executable to file*/
   t->executable = file;
 
