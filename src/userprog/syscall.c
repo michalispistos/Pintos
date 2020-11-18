@@ -32,9 +32,7 @@ void verify_memory_address(void **user_pointer)
   if (!user_pointer || !is_user_vaddr(user_pointer) || pagedir_get_page(thread_current()->pagedir, user_pointer) == NULL)
   {
     exit(-1);
-    // return false;
   }
-  // return true;
 }
 
 /* Tries to retrieve an open file with file descriptor fd. Returns a pointer to
@@ -73,8 +71,11 @@ void exit(int status)
   /* We add the exit code into the thread_info struct and set 
      exited_normally to true. */
   struct thread_info *info = thread_current()->thread_info;
-  info->exited_normally = true;
-  info->exit_code = status;
+  if (info)
+  {
+    info->exited_normally = true;
+    info->exit_code = status;
+  }
   thread_exit();
 }
 

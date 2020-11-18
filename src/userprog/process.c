@@ -283,8 +283,11 @@ void process_exit(void)
 
     /* Up-ing the semaphore in order to unblock the parent
        waiting on the child to terminate. 
-       This doesn't matter if it's been waited on. */
-    sema_up(&cur->thread_info->wait_sema);
+       This doesn't matter if ist's been waited on. */
+    if (cur->thread_info)
+    {
+      sema_up(&cur->thread_info->wait_sema);
+    }
 
     /* Freeing open_files list and closing the files. */
     struct list_elem *e;
