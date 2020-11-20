@@ -7,6 +7,9 @@
 /* Typedef for pid. */
 typedef int pid_t;
 
+/* Lock used in process_exit and exit. */
+struct lock exit_lock;
+
 /* Typedef for syscall function pointers. */
 typedef void *syscall(struct intr_frame *f);
 

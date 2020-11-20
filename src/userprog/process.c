@@ -27,12 +27,12 @@ static bool load(const char *cmdline, void (**eip)(void), void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
-tid_t process_execute(const char *file_name)
+tid_t process_execute(const char *cmd_line)
 {
   char *fn_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
+  /* Make a copy of cmd_li.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
   if (fn_copy == NULL)
@@ -40,7 +40,7 @@ tid_t process_execute(const char *file_name)
     return TID_ERROR;
   }
 
-  strlcpy(fn_copy, file_name, PGSIZE);
+  strlcpy(fn_copy, cmd_line, PGSIZE);
   char *token, *save_ptr;
   char **args = palloc_get_page(PAL_ZERO);
   if (!args)
@@ -260,6 +260,7 @@ int process_wait(tid_t child_tid)
 /* Free the current process's resources. */
 void process_exit(void)
 {
+  lock_acquire(&exit_lock);
   struct thread *cur = thread_current();
   uint32_t *pd;
 
@@ -283,7 +284,7 @@ void process_exit(void)
 
     /* Up-ing the semaphore in order to unblock the parent
        waiting on the child to terminate. 
-       This doesn't matter if ist's been waited on. */
+       This doesn't matter if it's been waited on. */
     if (cur->thread_info)
     {
       sema_up(&cur->thread_info->wait_sema);
@@ -313,6 +314,7 @@ void process_exit(void)
     }
     pagedir_destroy(pd);
   }
+  lock_release(&exit_lock);
 }
 
 /* Sets up the CPU for running user code in the current

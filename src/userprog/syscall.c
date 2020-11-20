@@ -56,6 +56,7 @@ void syscall_init(void)
 {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&file_lock);
+  lock_init(&exit_lock);
 }
 
 /* Terminates Pintos by calling shutdown_power_off(). */
@@ -67,6 +68,7 @@ static void halt(struct intr_frame *f UNUSED)
 /* Terminates the current user program. */
 void exit(int status)
 {
+  lock_acquire(&exit_lock);
   printf("%s: exit(%d)\n", thread_current()->name, status);
   /* We add the exit code into the thread_info struct and set 
      exited_normally to true. */
@@ -76,6 +78,7 @@ void exit(int status)
     info->exited_normally = true;
     info->exit_code = status;
   }
+  lock_release(&exit_lock);
   thread_exit();
 }
 
